@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatMetric(value: number | null): string {
   if (value === null) return '-'
-  return value.toFixed(1)
+  return Number(value).toFixed(1)
 }
 
 export function getPercentileColor(percentile: number | null): string {

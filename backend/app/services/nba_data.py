@@ -58,6 +58,16 @@ class NBADataService:
     def _request_with_delay(self, endpoint_class, **kwargs):
         """Make API request with delay to avoid rate limiting."""
         time.sleep(REQUEST_DELAY)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Referer": "https://www.nba.com/",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept": "application/json, text/plain, */*",
+            "Origin": "https://www.nba.com",
+            "Connection": "keep-alive",
+            "x-nba-stats-origin": "stats",
+            "x-nba-stats-token": "true",
+            }
         return endpoint_class(**kwargs)
 
     def get_all_players(self, season: str = "2024-25") -> list[dict]:
@@ -121,7 +131,7 @@ class NBADataService:
             per_mode_simple="Totals",
             defense_category="Overall",
         )
-        return defense.get_normalized_dict()["LeagueDashPtDefend"]
+        return defense.get_normalized_dict()["LeagueDashPTDefend"]
 
     def fetch_all_tracking_data(self, season: str = "2024-25") -> dict[int, PlayerTrackingData]:
         """
@@ -142,7 +152,7 @@ class NBADataService:
         hustle = {p["PLAYER_ID"]: p for p in self.get_hustle_stats(season)}
 
         print("  - Fetching defensive stats...")
-        defense = {p["PLAYER_ID"]: p for p in self.get_defensive_stats(season)}
+        defense = {p["CLOSE_DEF_PERSON_ID"]: p for p in self.get_defensive_stats(season)}
 
         # Combine into PlayerTrackingData objects
         combined: dict[int, PlayerTrackingData] = {}
