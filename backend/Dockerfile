@@ -9,14 +9,11 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy dependency files
-COPY pyproject.toml .
+# Copy application code first (needed for editable install)
+COPY . .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -e .
-
-# Copy application code
-COPY . .
 
 # Create data directory for caching
 RUN mkdir -p /app/data/nba_api_cache
