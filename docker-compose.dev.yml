@@ -1,0 +1,68 @@
+# Development docker-compose with hot reload
+# Usage: docker-compose -f docker-compose.dev.yml up
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: nba-stats-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: nba_stats
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: nba-stats-redis
+    ports:
+      - "6379:6379"
+
+  # FastAPI Backend (with hot reload)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nba-stats-backend
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/nba_stats
+      REDIS_URL: redis://redis:6379/0
+      NBA_API_CACHE_DIR: /app/data/nba_api_cache
+    volumes:
+      - ./backend:/app
+      - nba_api_cache:/app/data/nba_api_cache
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # React Frontend (Vite dev server with hot reload)
+  frontend:
+    image: node:20-alpine
+    container_name: nba-stats-frontend
+    working_dir: /app
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+
+volumes:
+  postgres_data:
+  nba_api_cache:
