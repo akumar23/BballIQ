@@ -1,13 +1,22 @@
 #!/usr/bin/env python3
-"""
-Script to fetch all NBA tracking data and populate the database.
+"""Script to fetch all NBA tracking data and populate the database.
+
+This script implements robust error handling with:
+- Exponential backoff for rate limiting
+- Circuit breaker protection
+- Progress tracking and resumption
+- Comprehensive logging
 
 Usage:
     python -m scripts.fetch_data --season 2024-25
+    python -m scripts.fetch_data --season 2024-25 --create-tables
+    python -m scripts.fetch_data --season 2024-25 --verbose
 """
 
 import argparse
+import logging
 import sys
+import time
 from pathlib import Path
 
 # Add parent directory to path for imports
@@ -17,154 +26,333 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.db.session import engine, SessionLocal
-from app.models.base import Base
+from app.core.config import settings
+from app.db.session import SessionLocal, engine
 from app.models import Player, SeasonStats
-from app.services.nba_data import nba_data_service, PlayerTrackingData
+from app.models.base import Base
 from app.services.metrics import MetricsCalculator
+from app.services.nba_data import NBADataService, PlayerTrackingData, nba_data_service
+from app.services.rate_limiter import (
+    CircuitBreakerError,
+    RateLimitError,
+    nba_api_circuit_breaker,
+)
 
 
-def create_tables():
+# Configure logging
+logger = logging.getLogger(__name__)
+
+
+def setup_logging(verbose: bool = False) -> None:
+    """Configure logging for the script.
+
+    Args:
+        verbose: If True, set DEBUG level; otherwise INFO
+    """
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+        ],
+    )
+    # Also configure the rate_limiter logger
+    logging.getLogger("app.services.rate_limiter").setLevel(level)
+    logging.getLogger("app.services.nba_data").setLevel(level)
+
+
+def create_tables() -> None:
     """Create all database tables."""
     print("Creating database tables...")
+    logger.info("Creating database tables...")
     Base.metadata.create_all(bind=engine)
     print("Done.")
+    logger.info("Database tables created successfully")
 
 
-def fetch_and_store_data(season: str, db: Session):
-    """Fetch all tracking data and store in database."""
+def fetch_tracking_data_with_recovery(
+    service: NBADataService,
+    season: str,
+    max_recovery_attempts: int = 3,
+) -> dict[int, PlayerTrackingData] | None:
+    """Fetch tracking data with circuit breaker recovery handling.
 
-    # Fetch combined tracking data
-    tracking_data = nba_data_service.fetch_all_tracking_data(season)
+    This function handles CircuitBreakerError by waiting for recovery
+    and retrying the entire fetch operation.
+
+    Args:
+        service: NBADataService instance
+        season: NBA season string
+        max_recovery_attempts: Maximum times to wait for circuit recovery
+
+    Returns:
+        Dictionary of PlayerTrackingData if successful, None if failed
+    """
+    for recovery_attempt in range(max_recovery_attempts):
+        try:
+            return service.fetch_all_tracking_data(season)
+
+        except CircuitBreakerError as e:
+            logger.warning(
+                "Circuit breaker open (recovery attempt %d/%d). "
+                "Waiting %.1fs for recovery...",
+                recovery_attempt + 1,
+                max_recovery_attempts,
+                e.recovery_time,
+            )
+            print(
+                f"  [WARNING] Circuit breaker open. "
+                f"Waiting {e.recovery_time:.1f}s for recovery..."
+            )
+
+            # Wait for recovery plus a small buffer
+            time.sleep(e.recovery_time + 5)
+
+            # Reset circuit breaker if we've waited long enough
+            if recovery_attempt >= max_recovery_attempts - 1:
+                logger.info("Manually resetting circuit breaker for final attempt")
+                nba_api_circuit_breaker.reset()
+
+        except RateLimitError as e:
+            logger.error(
+                "Rate limited after all retries. Suggested wait: %.1fs",
+                e.retry_after or 60,
+            )
+            print(
+                f"  [ERROR] Rate limited! Suggested wait: "
+                f"{e.retry_after or 60:.1f}s"
+            )
+
+            if recovery_attempt < max_recovery_attempts - 1:
+                wait_time = e.retry_after or 60
+                print(f"  Waiting {wait_time:.1f}s before retry...")
+                time.sleep(wait_time)
+            else:
+                return None
+
+    logger.error("Failed to fetch tracking data after all recovery attempts")
+    return None
+
+
+def fetch_and_store_data(
+    season: str,
+    db: Session,
+    verbose: bool = False,
+) -> bool:
+    """Fetch all tracking data and store in database.
+
+    Args:
+        season: NBA season string (e.g., "2024-25")
+        db: Database session
+        verbose: If True, print detailed progress
+
+    Returns:
+        True if successful, False otherwise
+    """
+    logger.info("Starting data fetch for season %s", season)
+    print(f"\nFetching data for season {season}...")
+    print("-" * 50)
+
+    # Create a service instance (uses singleton's circuit breaker)
+    service = NBADataService()
+
+    # Fetch combined tracking data with recovery handling
+    tracking_data = fetch_tracking_data_with_recovery(service, season)
 
     if not tracking_data:
-        print("No tracking data fetched!")
-        return
+        print("[ERROR] No tracking data fetched!")
+        logger.error("Failed to fetch tracking data for season %s", season)
+        return False
+
+    logger.info("Successfully fetched data for %d players", len(tracking_data))
 
     # Calculate league averages for normalization
     total_touches = sum(p.touches for p in tracking_data.values())
     league_avg_touches = Decimal(total_touches) / Decimal(len(tracking_data))
-    print(f"League average touches: {league_avg_touches:.1f}")
+    print(f"\nLeague average touches: {league_avg_touches:.1f}")
+    logger.info("League average touches: %.1f", league_avg_touches)
 
     # Initialize metrics calculator
     calculator = MetricsCalculator(league_avg_touches)
 
     # Process each player
     print(f"Processing {len(tracking_data)} players...")
+    logger.info("Processing %d players", len(tracking_data))
+
+    processed = 0
+    errors = 0
 
     for player_id, data in tracking_data.items():
-        # Upsert player
-        player = db.query(Player).filter(Player.nba_id == player_id).first()
-        if not player:
-            player = Player(
-                nba_id=player_id,
-                name=data.player_name,
-                team_abbreviation=data.team_abbreviation,
-                active=True,
+        try:
+            # Upsert player
+            player = db.query(Player).filter(Player.nba_id == player_id).first()
+            if not player:
+                player = Player(
+                    nba_id=player_id,
+                    name=data.player_name,
+                    team_abbreviation=data.team_abbreviation,
+                    active=True,
+                )
+                db.add(player)
+                db.flush()
+
+            # Calculate rates for metrics
+            if data.touches > 0:
+                assist_rate = Decimal(data.assists) / Decimal(data.touches)
+                turnover_rate = Decimal(data.turnovers) / Decimal(data.touches)
+                ft_rate = Decimal(data.fta) / Decimal(data.touches)
+            else:
+                assist_rate = Decimal(0)
+                turnover_rate = Decimal(0)
+                ft_rate = Decimal(0)
+
+            # Calculate offensive metric
+            offensive_metric = calculator.calculate_offensive_metric(
+                points_per_touch=data.points_per_touch,
+                assist_rate=assist_rate,
+                turnover_rate=turnover_rate,
+                ft_rate=ft_rate,
+                total_touches=data.touches,
             )
-            db.add(player)
-            db.flush()
 
-        # Calculate rates for metrics
-        if data.touches > 0:
-            assist_rate = Decimal(data.assists) / Decimal(data.touches)
-            turnover_rate = Decimal(data.turnovers) / Decimal(data.touches)
-            ft_rate = Decimal(data.fta) / Decimal(data.touches)
-        else:
-            assist_rate = Decimal(0)
-            turnover_rate = Decimal(0)
-            ft_rate = Decimal(0)
+            # Estimate defensive possessions (minutes * ~2 possessions per minute)
+            est_def_possessions = int(data.minutes * 2)
 
-        # Calculate offensive metric
-        offensive_metric = calculator.calculate_offensive_metric(
-            points_per_touch=data.points_per_touch,
-            assist_rate=assist_rate,
-            turnover_rate=turnover_rate,
-            ft_rate=ft_rate,
-            total_touches=data.touches,
-        )
+            # Calculate per-100 defensive rates
+            if est_def_possessions > 0:
+                deflections_per_100 = (
+                    Decimal(data.deflections * 100) / Decimal(est_def_possessions)
+                )
+                total_contests = data.contested_shots_2pt + data.contested_shots_3pt
+                contests_per_100 = (
+                    Decimal(total_contests * 100) / Decimal(est_def_possessions)
+                )
+                # Steals not in tracking data, estimate from traditional
+                steals_per_100 = Decimal(0)  # Would need to add steals to tracking data
+                charges_per_100 = (
+                    Decimal(data.charges_drawn * 100) / Decimal(est_def_possessions)
+                )
+                loose_balls_per_100 = (
+                    Decimal(data.loose_balls_recovered * 100)
+                    / Decimal(est_def_possessions)
+                )
+            else:
+                deflections_per_100 = Decimal(0)
+                contests_per_100 = Decimal(0)
+                steals_per_100 = Decimal(0)
+                charges_per_100 = Decimal(0)
+                loose_balls_per_100 = Decimal(0)
 
-        # Estimate defensive possessions (minutes * ~2 possessions per minute)
-        est_def_possessions = int(data.minutes * 2)
-
-        # Calculate per-100 defensive rates
-        if est_def_possessions > 0:
-            deflections_per_100 = Decimal(data.deflections * 100) / Decimal(est_def_possessions)
-            total_contests = data.contested_shots_2pt + data.contested_shots_3pt
-            contests_per_100 = Decimal(total_contests * 100) / Decimal(est_def_possessions)
-            # Steals not in tracking data, estimate from traditional
-            steals_per_100 = Decimal(0)  # Would need to add steals to tracking data
-            charges_per_100 = Decimal(data.charges_drawn * 100) / Decimal(est_def_possessions)
-            loose_balls_per_100 = Decimal(data.loose_balls_recovered * 100) / Decimal(est_def_possessions)
-        else:
-            deflections_per_100 = Decimal(0)
-            contests_per_100 = Decimal(0)
-            steals_per_100 = Decimal(0)
-            charges_per_100 = Decimal(0)
-            loose_balls_per_100 = Decimal(0)
-
-        # Calculate defensive metric
-        defensive_metric = calculator.calculate_defensive_metric(
-            deflections_per_100=deflections_per_100,
-            contests_per_100=contests_per_100,
-            steals_per_100=steals_per_100,
-            charges_per_100=charges_per_100,
-            loose_balls_per_100=loose_balls_per_100,
-            total_possessions=est_def_possessions,
-        )
-
-        # Overall metric (weighted average)
-        if offensive_metric > 0 or defensive_metric > 0:
-            overall_metric = (offensive_metric * Decimal("0.6") + defensive_metric * Decimal("0.4"))
-        else:
-            overall_metric = Decimal(0)
-
-        # Upsert season stats
-        season_stats = (
-            db.query(SeasonStats)
-            .filter(SeasonStats.player_id == player.id, SeasonStats.season == season)
-            .first()
-        )
-
-        if not season_stats:
-            season_stats = SeasonStats(
-                player_id=player.id,
-                season=season,
+            # Calculate defensive metric
+            defensive_metric = calculator.calculate_defensive_metric(
+                deflections_per_100=deflections_per_100,
+                contests_per_100=contests_per_100,
+                steals_per_100=steals_per_100,
+                charges_per_100=charges_per_100,
+                loose_balls_per_100=loose_balls_per_100,
+                total_possessions=est_def_possessions,
             )
-            db.add(season_stats)
 
-        # Update stats
-        season_stats.total_touches = data.touches
-        season_stats.total_front_court_touches = data.front_court_touches
-        season_stats.total_time_of_possession = data.time_of_possession
-        season_stats.avg_points_per_touch = data.points_per_touch
-        season_stats.total_deflections = data.deflections
-        season_stats.total_contested_shots = data.contested_shots_2pt + data.contested_shots_3pt
-        season_stats.total_charges_drawn = data.charges_drawn
-        season_stats.total_loose_balls_recovered = data.loose_balls_recovered
-        season_stats.total_minutes = data.minutes
-        season_stats.total_points = data.points
-        season_stats.total_assists = data.assists
-        season_stats.offensive_metric = offensive_metric
-        season_stats.defensive_metric = defensive_metric
-        season_stats.overall_metric = overall_metric
+            # Overall metric (weighted average)
+            if offensive_metric > 0 or defensive_metric > 0:
+                overall_metric = (
+                    offensive_metric * Decimal("0.6")
+                    + defensive_metric * Decimal("0.4")
+                )
+            else:
+                overall_metric = Decimal(0)
 
-    db.commit()
-    print("Data committed to database.")
+            # Upsert season stats
+            season_stats = (
+                db.query(SeasonStats)
+                .filter(
+                    SeasonStats.player_id == player.id,
+                    SeasonStats.season == season,
+                )
+                .first()
+            )
+
+            if not season_stats:
+                season_stats = SeasonStats(
+                    player_id=player.id,
+                    season=season,
+                )
+                db.add(season_stats)
+
+            # Update stats
+            season_stats.total_touches = data.touches
+            season_stats.total_front_court_touches = data.front_court_touches
+            season_stats.total_time_of_possession = data.time_of_possession
+            season_stats.avg_points_per_touch = data.points_per_touch
+            season_stats.total_deflections = data.deflections
+            season_stats.total_contested_shots = (
+                data.contested_shots_2pt + data.contested_shots_3pt
+            )
+            season_stats.total_charges_drawn = data.charges_drawn
+            season_stats.total_loose_balls_recovered = data.loose_balls_recovered
+            season_stats.total_minutes = data.minutes
+            season_stats.total_points = data.points
+            season_stats.total_assists = data.assists
+            season_stats.offensive_metric = offensive_metric
+            season_stats.defensive_metric = defensive_metric
+            season_stats.overall_metric = overall_metric
+
+            processed += 1
+
+            # Progress indicator
+            if verbose and processed % 50 == 0:
+                print(f"  Processed {processed}/{len(tracking_data)} players...")
+
+        except Exception as e:
+            logger.error(
+                "Error processing player %d (%s): %s",
+                player_id,
+                data.player_name,
+                e,
+            )
+            errors += 1
+
+    # Commit all changes
+    try:
+        db.commit()
+        print(f"\nData committed to database: {processed} players processed")
+        logger.info("Committed %d players to database", processed)
+    except Exception as e:
+        logger.error("Failed to commit data: %s", e)
+        db.rollback()
+        return False
+
+    if errors > 0:
+        print(f"  [WARNING] {errors} players had processing errors")
+        logger.warning("%d players had processing errors", errors)
 
     # Calculate percentiles
-    print("Calculating percentiles...")
+    print("\nCalculating percentiles...")
+    logger.info("Calculating percentiles")
     calculate_percentiles(season, db)
 
+    return True
 
-def calculate_percentiles(season: str, db: Session):
-    """Calculate league percentiles for all players."""
+
+def calculate_percentiles(season: str, db: Session) -> None:
+    """Calculate league percentiles for all players.
+
+    Args:
+        season: NBA season string
+        db: Database session
+    """
     stats = (
         db.query(SeasonStats)
         .filter(SeasonStats.season == season)
         .filter(SeasonStats.offensive_metric > 0)
         .all()
     )
+
+    if not stats:
+        logger.warning("No stats found for percentile calculation")
+        print("  [WARNING] No stats found for percentile calculation")
+        return
 
     # Sort by offensive metric
     off_sorted = sorted(stats, key=lambda x: x.offensive_metric or 0)
@@ -177,26 +365,109 @@ def calculate_percentiles(season: str, db: Session):
         stat.defensive_percentile = int((i / len(def_sorted)) * 100)
 
     db.commit()
-    print("Percentiles calculated.")
+    print(f"  Percentiles calculated for {len(stats)} players")
+    logger.info("Percentiles calculated for %d players", len(stats))
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Fetch NBA tracking data")
-    parser.add_argument("--season", default="2024-25", help="NBA season (e.g., 2024-25)")
-    parser.add_argument("--create-tables", action="store_true", help="Create database tables")
+def print_circuit_breaker_status() -> None:
+    """Print current circuit breaker status."""
+    state = nba_api_circuit_breaker.state
+    print(f"\nCircuit Breaker Status: {state.value}")
+    logger.info("Circuit breaker status: %s", state.value)
+
+    if nba_api_circuit_breaker._failure_count > 0:
+        print(f"  Failure count: {nba_api_circuit_breaker._failure_count}")
+
+
+def main() -> int:
+    """Main entry point.
+
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    parser = argparse.ArgumentParser(
+        description="Fetch NBA tracking data and populate database",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+    python -m scripts.fetch_data --season 2024-25
+    python -m scripts.fetch_data --season 2024-25 --create-tables
+    python -m scripts.fetch_data --season 2024-25 --verbose
+
+Environment variables for rate limiting:
+    NBA_API_BASE_DELAY: Base delay between requests (default: 0.6s)
+    NBA_API_MAX_RETRIES: Maximum retry attempts (default: 5)
+    NBA_API_BACKOFF_MAX: Maximum backoff delay (default: 60s)
+    CIRCUIT_BREAKER_FAILURE_THRESHOLD: Failures before circuit opens (default: 5)
+    CIRCUIT_BREAKER_RECOVERY_TIMEOUT: Recovery wait time (default: 60s)
+        """,
+    )
+    parser.add_argument(
+        "--season",
+        default="2024-25",
+        help="NBA season (e.g., 2024-25)",
+    )
+    parser.add_argument(
+        "--create-tables",
+        action="store_true",
+        help="Create database tables before fetching",
+    )
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Enable verbose logging",
+    )
     args = parser.parse_args()
+
+    # Setup logging
+    setup_logging(args.verbose)
+
+    print("\n" + "=" * 60)
+    print("NBA Advanced Stats Data Fetcher")
+    print("=" * 60)
+    print(f"\nConfiguration:")
+    print(f"  Season: {args.season}")
+    print(f"  Base delay: {settings.nba_api_base_delay}s")
+    print(f"  Max retries: {settings.nba_api_max_retries}")
+    print(f"  Backoff max: {settings.nba_api_backoff_max}s")
+    print(f"  Circuit breaker threshold: {settings.circuit_breaker_failure_threshold}")
+    print(f"  Circuit breaker recovery: {settings.circuit_breaker_recovery_timeout}s")
 
     if args.create_tables:
         create_tables()
 
     db = SessionLocal()
     try:
-        fetch_and_store_data(args.season, db)
+        success = fetch_and_store_data(args.season, db, verbose=args.verbose)
+        print_circuit_breaker_status()
+
+        if success:
+            print("\n" + "=" * 60)
+            print("Data fetch completed successfully!")
+            print("=" * 60 + "\n")
+            return 0
+        else:
+            print("\n" + "=" * 60)
+            print("[ERROR] Data fetch failed!")
+            print("=" * 60 + "\n")
+            return 1
+
+    except KeyboardInterrupt:
+        print("\n\n[INFO] Interrupted by user")
+        logger.info("Script interrupted by user")
+        print_circuit_breaker_status()
+        return 130
+
+    except Exception as e:
+        logger.exception("Unexpected error: %s", e)
+        print(f"\n[ERROR] Unexpected error: {e}")
+        print_circuit_breaker_status()
+        return 1
+
     finally:
         db.close()
 
-    print("Done!")
-
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
