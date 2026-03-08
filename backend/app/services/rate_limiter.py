@@ -203,10 +203,10 @@ def calculate_backoff_delay(
     Returns:
         Calculated delay in seconds with jitter applied
     """
-    base_delay = base_delay or settings.nba_api_base_delay
-    backoff_base = backoff_base or settings.nba_api_backoff_base
-    max_delay = max_delay or settings.nba_api_backoff_max
-    jitter_max = jitter_max or settings.nba_api_jitter_max
+    base_delay = base_delay if base_delay is not None else settings.nba_api_base_delay
+    backoff_base = backoff_base if backoff_base is not None else settings.nba_api_backoff_base
+    max_delay = max_delay if max_delay is not None else settings.nba_api_backoff_max
+    jitter_max = jitter_max if jitter_max is not None else settings.nba_api_jitter_max
 
     # Calculate exponential delay
     delay = base_delay * (backoff_base**attempt)

@@ -12,7 +12,6 @@ from decimal import Decimal
 from typing import Any
 
 from pbpstats.client import Client
-from pbpstats.resources.enhanced_pbp import EnhancedPbpItem
 
 from app.core.config import settings
 from app.services.rate_limiter import (

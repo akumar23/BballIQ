@@ -153,11 +153,12 @@ class NBADataService:
                     delay = calculate_backoff_delay(
                         attempt - 1, base_delay=self.base_delay
                     )
+                    endpoint_name = getattr(endpoint_class, "__name__", str(endpoint_class))
                     logger.info(
                         "Retry attempt %d/%d for %s, waiting %.2fs",
                         attempt,
                         self.max_retries,
-                        endpoint_class.__name__,
+                        endpoint_name,
                         delay,
                     )
                 else:
@@ -175,9 +176,10 @@ class NBADataService:
 
                 # Record success
                 nba_api_circuit_breaker.record_success()
+                endpoint_name = getattr(endpoint_class, "__name__", str(endpoint_class))
                 logger.debug(
                     "Successfully fetched %s",
-                    endpoint_class.__name__,
+                    endpoint_name,
                 )
 
                 return endpoint
@@ -197,10 +199,11 @@ class NBADataService:
                     str(code) in str(e) for code in [500, 502, 503, 504]
                 )
 
+                endpoint_name = getattr(endpoint_class, "__name__", str(endpoint_class))
                 if is_rate_limit or is_server_error:
                     logger.warning(
                         "Request to %s failed (attempt %d/%d): %s",
-                        endpoint_class.__name__,
+                        endpoint_name,
                         attempt + 1,
                         self.max_retries + 1,
                         e,
@@ -211,7 +214,7 @@ class NBADataService:
                     # Non-retryable error
                     logger.error(
                         "Non-retryable error for %s: %s",
-                        endpoint_class.__name__,
+                        endpoint_name,
                         e,
                     )
                     nba_api_circuit_breaker.record_failure()
