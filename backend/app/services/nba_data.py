@@ -1,7 +1,8 @@
 """Service for fetching data from NBA API and PBP Stats.
 
 This module provides rate-limited, resilient access to the NBA Stats API
-with exponential backoff, retry logic, and circuit breaker protection.
+with exponential backoff, retry logic, circuit breaker protection, and
+Redis caching to minimize external API calls.
 """
 
 import logging
@@ -26,6 +27,10 @@ from app.services.rate_limiter import (
     get_nba_session,
     nba_api_circuit_breaker,
     with_retry,
+)
+from app.services.redis_cache import (
+    CacheKeyPrefix,
+    redis_cache,
 )
 
 
@@ -74,23 +79,27 @@ class NBADataService:
     - Circuit breaker to prevent hammering a failing API
     - Configurable retry logic
     - Proper HTTP headers for NBA API authentication
+    - Redis caching to minimize external API calls
 
     Attributes:
         cache_dir: Directory for caching API responses
         max_retries: Maximum retry attempts per request
         base_delay: Base delay between requests in seconds
+        bypass_cache: If True, skip cache lookup and force API fetch
     """
 
     def __init__(
         self,
         max_retries: int | None = None,
         base_delay: float | None = None,
+        bypass_cache: bool = False,
     ):
         """Initialize the NBA Data Service.
 
         Args:
             max_retries: Maximum retry attempts (uses config default if None)
             base_delay: Base delay between requests (uses config default if None)
+            bypass_cache: If True, skip Redis cache and always fetch from API
         """
         self.cache_dir = settings.nba_api_cache_dir
         self.max_retries = (
@@ -99,6 +108,7 @@ class NBADataService:
         self.base_delay = (
             base_delay if base_delay is not None else settings.nba_api_base_delay
         )
+        self.bypass_cache = bypass_cache
         self._session = get_nba_session()
 
     def _request_with_retry(
@@ -227,6 +237,18 @@ class NBADataService:
             return max(0, nba_api_circuit_breaker.recovery_timeout - elapsed)
         return 0
 
+    def _get_cache_key(self, prefix: CacheKeyPrefix, season: str) -> str:
+        """Build a cache key for the given data type and season.
+
+        Args:
+            prefix: Cache key prefix
+            season: NBA season string
+
+        Returns:
+            Formatted cache key
+        """
+        return f"{prefix.value}:{season}"
+
     def get_all_players(self, season: str = "2024-25") -> list[dict]:
         """Get all active players for a season.
 
@@ -240,12 +262,26 @@ class NBADataService:
             CircuitBreakerError: If circuit breaker is open
             RateLimitError: If rate limited after max retries
         """
+        cache_key = self._get_cache_key(CacheKeyPrefix.NBA_PLAYERS, season)
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info("Cache hit for players (season: %s)", season)
+                return cached
+
+        logger.info("Cache miss for players (season: %s), fetching from API", season)
         players = self._request_with_retry(
             CommonAllPlayers,
             is_only_current_season=1,
             season=season,
         )
-        return players.get_normalized_dict()["CommonAllPlayers"]
+        result = players.get_normalized_dict()["CommonAllPlayers"]
+
+        # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_players)
+        return result
 
     def get_traditional_stats(self, season: str = "2024-25") -> list[dict]:
         """Get traditional box score stats for all players.
@@ -260,13 +296,29 @@ class NBADataService:
             CircuitBreakerError: If circuit breaker is open
             RateLimitError: If rate limited after max retries
         """
+        cache_key = self._get_cache_key(CacheKeyPrefix.NBA_TRADITIONAL_STATS, season)
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info("Cache hit for traditional stats (season: %s)", season)
+                return cached
+
+        logger.info(
+            "Cache miss for traditional stats (season: %s), fetching from API", season
+        )
         stats = self._request_with_retry(
             LeagueDashPlayerStats,
             season=season,
             per_mode_detailed="Totals",
             measure_type_detailed_defense="Base",
         )
-        return stats.get_normalized_dict()["LeagueDashPlayerStats"]
+        result = stats.get_normalized_dict()["LeagueDashPlayerStats"]
+
+        # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
 
     def get_touch_stats(self, season: str = "2024-25") -> list[dict]:
         """Get touch tracking stats for all players.
@@ -284,6 +336,16 @@ class NBADataService:
             CircuitBreakerError: If circuit breaker is open
             RateLimitError: If rate limited after max retries
         """
+        cache_key = self._get_cache_key(CacheKeyPrefix.NBA_TOUCH_STATS, season)
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info("Cache hit for touch stats (season: %s)", season)
+                return cached
+
+        logger.info("Cache miss for touch stats (season: %s), fetching from API", season)
         touches = self._request_with_retry(
             LeagueDashPtStats,
             season=season,
@@ -291,7 +353,11 @@ class NBADataService:
             player_or_team="Player",
             pt_measure_type="Possessions",
         )
-        return touches.get_normalized_dict()["LeagueDashPtStats"]
+        result = touches.get_normalized_dict()["LeagueDashPtStats"]
+
+        # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
 
     def get_hustle_stats(self, season: str = "2024-25") -> list[dict]:
         """Get hustle stats for all players.
@@ -309,12 +375,28 @@ class NBADataService:
             CircuitBreakerError: If circuit breaker is open
             RateLimitError: If rate limited after max retries
         """
+        cache_key = self._get_cache_key(CacheKeyPrefix.NBA_HUSTLE_STATS, season)
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info("Cache hit for hustle stats (season: %s)", season)
+                return cached
+
+        logger.info(
+            "Cache miss for hustle stats (season: %s), fetching from API", season
+        )
         hustle = self._request_with_retry(
             LeagueHustleStatsPlayer,
             season=season,
             per_mode_time="Totals",
         )
-        return hustle.get_normalized_dict()["HustleStatsPlayer"]
+        result = hustle.get_normalized_dict()["HustleStatsPlayer"]
+
+        # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
 
     def get_defensive_stats(self, season: str = "2024-25") -> list[dict]:
         """Get defensive tracking stats for all players.
@@ -331,13 +413,29 @@ class NBADataService:
             CircuitBreakerError: If circuit breaker is open
             RateLimitError: If rate limited after max retries
         """
+        cache_key = self._get_cache_key(CacheKeyPrefix.NBA_DEFENSIVE_STATS, season)
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info("Cache hit for defensive stats (season: %s)", season)
+                return cached
+
+        logger.info(
+            "Cache miss for defensive stats (season: %s), fetching from API", season
+        )
         defense = self._request_with_retry(
             LeagueDashPtDefend,
             season=season,
             per_mode_simple="Totals",
             defense_category="Overall",
         )
-        return defense.get_normalized_dict()["LeagueDashPTDefend"]
+        result = defense.get_normalized_dict()["LeagueDashPTDefend"]
+
+        # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
 
     def fetch_all_tracking_data(
         self,

@@ -4,6 +4,7 @@ This module provides:
 - NBA API data fetching with rate limiting
 - PBP Stats data fetching
 - Rate limiting utilities (circuit breaker, backoff, retry)
+- Redis caching for API responses
 - Metrics calculation
 """
 
@@ -32,6 +33,12 @@ from app.services.pbp_data import (
     pbp_stats_circuit_breaker,
     pbp_stats_service,
 )
+from app.services.redis_cache import (
+    CacheKeyPrefix,
+    RedisCacheService,
+    get_cached_or_fetch,
+    redis_cache,
+)
 
 __all__ = [
     # Rate limiter
@@ -56,4 +63,9 @@ __all__ = [
     "PossessionStats",
     "pbp_stats_circuit_breaker",
     "pbp_stats_service",
+    # Redis Cache
+    "CacheKeyPrefix",
+    "RedisCacheService",
+    "get_cached_or_fetch",
+    "redis_cache",
 ]

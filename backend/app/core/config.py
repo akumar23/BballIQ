@@ -10,6 +10,13 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
+    # Redis Cache TTL (Time To Live) Configuration
+    cache_ttl_default: int = 86400  # 24 hours in seconds
+    cache_ttl_players: int = 86400  # Player data TTL
+    cache_ttl_tracking_stats: int = 86400  # Tracking stats TTL
+    cache_ttl_game_possessions: int = 604800  # Game data TTL (7 days - historical)
+    cache_enabled: bool = True  # Global cache enable/disable
+
     # CORS
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 

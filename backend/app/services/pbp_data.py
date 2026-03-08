@@ -1,7 +1,8 @@
 """Service for fetching data from PBP Stats.
 
 This module provides rate-limited, resilient access to the PBP Stats API
-with exponential backoff, retry logic, and circuit breaker protection.
+with exponential backoff, retry logic, circuit breaker protection, and
+Redis caching to minimize external API calls.
 """
 
 import logging
@@ -21,6 +22,10 @@ from app.services.rate_limiter import (
     calculate_backoff_delay,
     is_rate_limit_error,
     is_server_error,
+)
+from app.services.redis_cache import (
+    CacheKeyPrefix,
+    redis_cache,
 )
 
 
@@ -62,22 +67,26 @@ class PBPStatsService:
     - Circuit breaker to prevent hammering a failing API
     - Configurable retry logic
     - Comprehensive logging
+    - Redis caching to minimize external API calls
 
     Attributes:
         max_retries: Maximum retry attempts per request
         base_delay: Base delay between requests in seconds
+        bypass_cache: If True, skip cache lookup and force API fetch
     """
 
     def __init__(
         self,
         max_retries: int | None = None,
         base_delay: float | None = None,
+        bypass_cache: bool = False,
     ):
         """Initialize the PBP Stats Service.
 
         Args:
             max_retries: Maximum retry attempts (uses config default if None)
             base_delay: Base delay between requests (uses config default if None)
+            bypass_cache: If True, skip Redis cache and always fetch from API
         """
         self.max_retries = (
             max_retries if max_retries is not None else settings.nba_api_max_retries
@@ -85,6 +94,7 @@ class PBPStatsService:
         self.base_delay = (
             base_delay if base_delay is not None else settings.nba_api_base_delay
         )
+        self.bypass_cache = bypass_cache
         self._settings = {
             "dir": settings.nba_api_cache_dir,
             "Boxscore": {"source": "file", "data_provider": "stats_nba"},
@@ -199,6 +209,19 @@ class PBPStatsService:
         """
         return Client(self._settings)
 
+    def _get_cache_key(self, prefix: CacheKeyPrefix, *parts: str) -> str:
+        """Build a cache key for the given data type.
+
+        Args:
+            prefix: Cache key prefix
+            *parts: Additional key parts
+
+        Returns:
+            Formatted cache key
+        """
+        all_parts = [prefix.value] + list(parts)
+        return ":".join(all_parts)
+
     def get_season_totals(
         self,
         season: str = "2024-25",
@@ -220,6 +243,28 @@ class PBPStatsService:
             CircuitBreakerError: If circuit breaker is open
             RateLimitError: If rate limited after max retries
         """
+        # Normalize season_type for cache key
+        season_type_key = season_type.lower().replace(" ", "_")
+        cache_key = self._get_cache_key(
+            CacheKeyPrefix.PBP_SEASON_TOTALS, season, season_type_key
+        )
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info(
+                    "Cache hit for season totals (season: %s, type: %s)",
+                    season,
+                    season_type,
+                )
+                return cached
+
+        logger.info(
+            "Cache miss for season totals (season: %s, type: %s), fetching from API",
+            season,
+            season_type,
+        )
 
         def _fetch_season() -> dict:
             client = Client(
@@ -229,10 +274,16 @@ class PBPStatsService:
             return {"games": [g for g in season_obj.games.items]}
 
         try:
-            return self._execute_with_retry(
+            result = self._execute_with_retry(
                 f"fetch_season_{season}_{season_type}",
                 _fetch_season,
             )
+
+            # Cache the result
+            redis_cache.set(
+                cache_key, result, ttl=settings.cache_ttl_tracking_stats
+            )
+            return result
         except CircuitBreakerError:
             raise
         except RateLimitError:
@@ -254,6 +305,21 @@ class PBPStatsService:
             CircuitBreakerError: If circuit breaker is open
             RateLimitError: If rate limited after max retries
         """
+        cache_key = self._get_cache_key(
+            CacheKeyPrefix.PBP_GAME_POSSESSIONS, game_id
+        )
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.debug("Cache hit for game possessions (game_id: %s)", game_id)
+                return cached
+
+        logger.debug(
+            "Cache miss for game possessions (game_id: %s), fetching from API",
+            game_id,
+        )
 
         def _fetch_possessions() -> list:
             client = self.get_client()
@@ -261,10 +327,16 @@ class PBPStatsService:
             return list(game.possessions.items)
 
         try:
-            return self._execute_with_retry(
+            result = self._execute_with_retry(
                 f"fetch_game_possessions_{game_id}",
                 _fetch_possessions,
             )
+
+            # Cache the result (game data is historical, use longer TTL)
+            redis_cache.set(
+                cache_key, result, ttl=settings.cache_ttl_game_possessions
+            )
+            return result
         except CircuitBreakerError:
             raise
         except RateLimitError:

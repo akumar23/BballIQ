@@ -37,6 +37,7 @@ from app.services.rate_limiter import (
     RateLimitError,
     nba_api_circuit_breaker,
 )
+from app.services.redis_cache import redis_cache
 
 
 # Configure logging
@@ -139,6 +140,7 @@ def fetch_and_store_data(
     season: str,
     db: Session,
     verbose: bool = False,
+    bypass_cache: bool = False,
 ) -> bool:
     """Fetch all tracking data and store in database.
 
@@ -146,16 +148,20 @@ def fetch_and_store_data(
         season: NBA season string (e.g., "2024-25")
         db: Database session
         verbose: If True, print detailed progress
+        bypass_cache: If True, skip Redis cache and force API fetch
 
     Returns:
         True if successful, False otherwise
     """
     logger.info("Starting data fetch for season %s", season)
     print(f"\nFetching data for season {season}...")
+    if bypass_cache:
+        print("  [INFO] Cache bypass enabled - forcing fresh API calls")
+        logger.info("Cache bypass enabled")
     print("-" * 50)
 
     # Create a service instance (uses singleton's circuit breaker)
-    service = NBADataService()
+    service = NBADataService(bypass_cache=bypass_cache)
 
     # Fetch combined tracking data with recovery handling
     tracking_data = fetch_tracking_data_with_recovery(service, season)
@@ -379,6 +385,20 @@ def print_circuit_breaker_status() -> None:
         print(f"  Failure count: {nba_api_circuit_breaker._failure_count}")
 
 
+def print_cache_status() -> None:
+    """Print current Redis cache status."""
+    stats = redis_cache.get_stats()
+    print(f"\nRedis Cache Status:")
+    print(f"  Connected: {stats.get('connected', False)}")
+    print(f"  Enabled: {stats.get('enabled', False)}")
+    if stats.get("connected"):
+        print(f"  Cache hits: {stats.get('hits', 0)}")
+        print(f"  Cache misses: {stats.get('misses', 0)}")
+        print(f"  Total keys: {stats.get('keys', 0)}")
+    elif stats.get("error"):
+        print(f"  Error: {stats.get('error')}")
+
+
 def main() -> int:
     """Main entry point.
 
@@ -393,6 +413,8 @@ Examples:
     python -m scripts.fetch_data --season 2024-25
     python -m scripts.fetch_data --season 2024-25 --create-tables
     python -m scripts.fetch_data --season 2024-25 --verbose
+    python -m scripts.fetch_data --season 2024-25 --no-cache
+    python -m scripts.fetch_data --invalidate-cache 2024-25
 
 Environment variables for rate limiting:
     NBA_API_BASE_DELAY: Base delay between requests (default: 0.6s)
@@ -400,6 +422,13 @@ Environment variables for rate limiting:
     NBA_API_BACKOFF_MAX: Maximum backoff delay (default: 60s)
     CIRCUIT_BREAKER_FAILURE_THRESHOLD: Failures before circuit opens (default: 5)
     CIRCUIT_BREAKER_RECOVERY_TIMEOUT: Recovery wait time (default: 60s)
+
+Environment variables for caching:
+    CACHE_ENABLED: Enable/disable Redis caching (default: True)
+    CACHE_TTL_DEFAULT: Default cache TTL in seconds (default: 86400)
+    CACHE_TTL_PLAYERS: Player data TTL (default: 86400)
+    CACHE_TTL_TRACKING_STATS: Tracking stats TTL (default: 86400)
+    CACHE_TTL_GAME_POSSESSIONS: Game possession TTL (default: 604800)
         """,
     )
     parser.add_argument(
@@ -418,6 +447,16 @@ Environment variables for rate limiting:
         action="store_true",
         help="Enable verbose logging",
     )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Bypass Redis cache and force fresh API calls",
+    )
+    parser.add_argument(
+        "--invalidate-cache",
+        metavar="SEASON",
+        help="Invalidate cache for a specific season and exit (e.g., 2024-25)",
+    )
     args = parser.parse_args()
 
     # Setup logging
@@ -426,6 +465,15 @@ Environment variables for rate limiting:
     print("\n" + "=" * 60)
     print("NBA Advanced Stats Data Fetcher")
     print("=" * 60)
+
+    # Handle cache invalidation command
+    if args.invalidate_cache:
+        print(f"\nInvalidating cache for season {args.invalidate_cache}...")
+        deleted = redis_cache.invalidate_season(args.invalidate_cache)
+        print(f"  Deleted {deleted} cache keys")
+        print_cache_status()
+        return 0
+
     print(f"\nConfiguration:")
     print(f"  Season: {args.season}")
     print(f"  Base delay: {settings.nba_api_base_delay}s")
@@ -433,14 +481,20 @@ Environment variables for rate limiting:
     print(f"  Backoff max: {settings.nba_api_backoff_max}s")
     print(f"  Circuit breaker threshold: {settings.circuit_breaker_failure_threshold}")
     print(f"  Circuit breaker recovery: {settings.circuit_breaker_recovery_timeout}s")
+    print(f"  Cache enabled: {settings.cache_enabled}")
+    print(f"  Cache bypass: {args.no_cache}")
+    print(f"  Cache TTL (default): {settings.cache_ttl_default}s ({settings.cache_ttl_default // 3600}h)")
 
     if args.create_tables:
         create_tables()
 
     db = SessionLocal()
     try:
-        success = fetch_and_store_data(args.season, db, verbose=args.verbose)
+        success = fetch_and_store_data(
+            args.season, db, verbose=args.verbose, bypass_cache=args.no_cache
+        )
         print_circuit_breaker_status()
+        print_cache_status()
 
         if success:
             print("\n" + "=" * 60)
@@ -457,12 +511,14 @@ Environment variables for rate limiting:
         print("\n\n[INFO] Interrupted by user")
         logger.info("Script interrupted by user")
         print_circuit_breaker_status()
+        print_cache_status()
         return 130
 
     except Exception as e:
         logger.exception("Unexpected error: %s", e)
         print(f"\n[ERROR] Unexpected error: {e}")
         print_circuit_breaker_status()
+        print_cache_status()
         return 1
 
     finally:
