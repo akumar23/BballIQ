@@ -314,6 +314,66 @@ You should see the NBA Advanced Stats leaderboard!
 
 ---
 
+## Database Safety (Docker)
+
+Your PostgreSQL data is stored in a Docker volume (`postgres_data`) and **persists between restarts** — but certain commands will delete it.
+
+### Safe Commands (data preserved)
+
+```bash
+# Stop containers, keep data
+docker-compose stop
+
+# Stop and remove containers, keep data
+docker-compose down
+
+# Restart everything
+docker-compose up -d
+```
+
+### Dangerous Commands (data lost)
+
+```bash
+# DON'T use -v flag — this removes volumes!
+docker-compose down -v
+
+# DON'T prune volumes
+docker system prune --volumes
+docker volume rm postgres_data
+```
+
+### Backup & Restore
+
+**Create a backup:**
+```bash
+docker exec nba-stats-db pg_dump -U postgres nba_stats > backup.sql
+```
+
+**Restore from backup:**
+```bash
+docker exec -i nba-stats-db psql -U postgres nba_stats < backup.sql
+```
+
+**Quick data refresh (if you lose data):**
+```bash
+docker-compose exec backend python -m scripts.fetch_data --create-tables --season 2024-25
+```
+
+### Optional: Local Directory Storage
+
+To store database files directly in your project (easier to see/backup), update `docker-compose.yml`:
+
+```yaml
+services:
+  db:
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data  # Instead of named volume
+```
+
+Then add `data/` to your `.gitignore`.
+
+---
+
 ## Common Issues
 
 ### "command not found: python3"
