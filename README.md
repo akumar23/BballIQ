@@ -84,6 +84,36 @@ docker-compose -f docker-compose.dev.yml up
 
 Changes to your code will automatically reload.
 
+### Rebuilding After Code Changes
+
+**Development mode** (`docker-compose.dev.yml`) auto-reloads on code changes — no rebuild needed.
+
+**Production mode** (`docker-compose.yml`) requires a rebuild when you change code:
+
+```bash
+# Rebuild and restart all services
+docker-compose up --build
+
+# Rebuild a specific service only
+docker-compose up --build backend
+docker-compose up --build frontend
+
+# Force full rebuild (no cache)
+docker-compose build --no-cache
+docker-compose up
+```
+
+**When to rebuild:**
+- Changed Python dependencies (`pyproject.toml`)
+- Changed Node dependencies (`package.json`)
+- Modified Dockerfile
+- Any code changes when using production compose file
+
+**When rebuild is NOT needed:**
+- Using `docker-compose.dev.yml` (hot reload handles it)
+- Only changed database data
+- Only changed environment variables (just restart: `docker-compose up -d`)
+
 ---
 
 ## Manual Setup (without Docker)
