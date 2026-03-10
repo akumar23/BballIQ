@@ -3,6 +3,7 @@ import Layout from './components/Layout'
 import PlayersPage from './pages/PlayersPage'
 import PlayerDetailPage from './pages/PlayerDetailPage'
 import LeaderboardPage from './pages/LeaderboardPage'
+import LeagueLeadersPage from './pages/LeagueLeadersPage'
 import ImpactPage from './pages/ImpactPage'
 
 function App() {
@@ -10,6 +11,7 @@ function App() {
     <Layout>
       <Routes>
         <Route path="/" element={<LeaderboardPage />} />
+        <Route path="/league-leaders" element={<LeagueLeadersPage />} />
         <Route path="/players" element={<PlayersPage />} />
         <Route path="/players/:id" element={<PlayerDetailPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />

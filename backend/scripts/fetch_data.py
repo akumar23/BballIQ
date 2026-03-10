@@ -327,6 +327,10 @@ def fetch_and_store_data(
             season_stats.total_box_outs_off = data.box_outs_off
             season_stats.total_box_outs_def = data.box_outs_def
             season_stats.total_screen_assists = data.screen_assists
+            season_stats.games_played = data.games_played
+            season_stats.total_fta = data.fta
+            season_stats.total_ftm = data.ftm
+            season_stats.total_rebounds = data.rebounds
             season_stats.total_screen_assist_pts = data.screen_assist_pts
 
             # Store estimated possessions

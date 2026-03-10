@@ -21,6 +21,8 @@ class SeasonStats(Base):
     total_points: Mapped[int | None]
     total_assists: Mapped[int | None]
     total_rebounds: Mapped[int | None]
+    total_ftm: Mapped[int | None]
+    total_fta: Mapped[int | None]
     total_offensive_rebounds: Mapped[int | None]
     total_defensive_rebounds: Mapped[int | None]
     total_steals: Mapped[int | None]

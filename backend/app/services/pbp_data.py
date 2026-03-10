@@ -347,7 +347,7 @@ class PBPStatsService:
     def get_multiple_game_possessions(
         self,
         game_ids: list[str],
-        on_progress: callable | None = None,
+        on_progress: Any | None = None,
     ) -> dict[str, list]:
         """Fetch possessions for multiple games with proper rate limiting.
 

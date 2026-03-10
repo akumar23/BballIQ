@@ -138,7 +138,10 @@ class PlayerTrackingData:
     fg3a: int
     ftm: int
     fta: int
+    ftm: int
     minutes: Decimal
+    games_played: int
+    rebounds: int
     plus_minus: int
 
 
@@ -863,17 +866,8 @@ class NBADataService:
                 points=trad.get("PTS", 0) or 0,
                 assists=trad.get("AST", 0) or 0,
                 turnovers=trad.get("TOV", 0) or 0,
-                steals=trad.get("STL", 0) or 0,
-                blocks=trad.get("BLK", 0) or 0,
-                offensive_rebounds=trad.get("OREB", 0) or 0,
-                defensive_rebounds=trad.get("DREB", 0) or 0,
-                rebounds=trad.get("REB", 0) or 0,
-                fgm=trad.get("FGM", 0) or 0,
-                fga=trad.get("FGA", 0) or 0,
-                fg3m=trad.get("FG3M", 0) or 0,
-                fg3a=trad.get("FG3A", 0) or 0,
-                ftm=trad.get("FTM", 0) or 0,
                 fta=trad.get("FTA", 0) or 0,
+                ftm=trad.get("FTM", 0) or 0,
                 minutes=Decimal(str(trad.get("MIN", 0) or 0)),
                 plus_minus=trad.get("PLUS_MINUS", 0) or 0,
             )

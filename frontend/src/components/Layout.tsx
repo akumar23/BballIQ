@@ -24,6 +24,9 @@ export default function Layout({ children }: LayoutProps) {
               <Link to="/players" className="text-gray-600 hover:text-gray-900">
                 Players
               </Link>
+              <Link to="/league-leaders" className="text-gray-600 hover:text-gray-900">
+                League Leaders
+              </Link>
             </div>
           </div>
         </nav>
