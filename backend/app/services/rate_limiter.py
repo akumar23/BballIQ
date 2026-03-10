@@ -235,6 +235,8 @@ def create_nba_session(timeout: int | None = None) -> requests.Session:
     session = requests.Session()
 
     # Set NBA API headers
+    # Note: We explicitly set Accept-Encoding to gzip,deflate (no zstd)
+    # because zstd encoding causes timeouts with the NBA API
     session.headers.update(
         {
             "User-Agent": (
@@ -245,6 +247,7 @@ def create_nba_session(timeout: int | None = None) -> requests.Session:
             "Referer": "https://www.nba.com/",
             "Accept-Language": "en-US,en;q=0.9",
             "Accept": "application/json, text/plain, */*",
+            "Accept-Encoding": "gzip, deflate",  # Explicitly set - no zstd
             "Origin": "https://www.nba.com",
             "Connection": "keep-alive",
             "x-nba-stats-origin": "stats",

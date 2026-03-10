@@ -15,9 +15,12 @@ from nba_api.stats.endpoints import (
     CommonAllPlayers,
     LeagueDashPlayerStats,
 )
+from nba_api.stats.endpoints.leaguedashlineups import LeagueDashLineups
 from nba_api.stats.endpoints.leaguedashptdefend import LeagueDashPtDefend
 from nba_api.stats.endpoints.leaguedashptstats import LeagueDashPtStats
 from nba_api.stats.endpoints.leaguehustlestatsplayer import LeagueHustleStatsPlayer
+from nba_api.stats.endpoints.teamplayeronoffsummary import TeamPlayerOnOffSummary
+from nba_api.stats.static import teams as nba_teams
 
 from app.core.config import settings
 from app.services.rate_limiter import (
@@ -41,12 +44,64 @@ EndpointT = TypeVar("EndpointT")
 
 
 @dataclass
+class PlayerOnOffData:
+    """On/Off court data for a player."""
+
+    player_id: int
+    player_name: str
+    team_id: int
+    team_abbreviation: str
+
+    # On-court stats
+    on_court_min: Decimal
+    on_court_plus_minus: Decimal
+    on_court_off_rating: Decimal
+    on_court_def_rating: Decimal
+    on_court_net_rating: Decimal
+
+    # Off-court stats
+    off_court_min: Decimal
+    off_court_plus_minus: Decimal
+    off_court_off_rating: Decimal
+    off_court_def_rating: Decimal
+    off_court_net_rating: Decimal
+
+    # Differentials (on - off)
+    plus_minus_diff: Decimal
+    off_rating_diff: Decimal
+    def_rating_diff: Decimal
+    net_rating_diff: Decimal
+
+
+@dataclass
+class LineupData:
+    """5-man lineup data."""
+
+    lineup_id: str  # Sorted player IDs joined
+    player_ids: list[int]
+    player_names: list[str]
+    team_id: int
+    team_abbreviation: str
+
+    # Lineup stats
+    games_played: int
+    minutes: Decimal
+    plus_minus: Decimal
+    off_rating: Decimal
+    def_rating: Decimal
+    net_rating: Decimal
+
+
+@dataclass
 class PlayerTrackingData:
     """Aggregated tracking data for a player."""
 
     player_id: int
     player_name: str
     team_abbreviation: str
+
+    # Game info
+    games_played: int
 
     # Offensive tracking
     touches: int
@@ -56,19 +111,35 @@ class PlayerTrackingData:
     avg_dribbles_per_touch: Decimal
     points_per_touch: Decimal
 
-    # Defensive tracking
+    # Defensive/Hustle tracking
     deflections: int
     contested_shots_2pt: int
     contested_shots_3pt: int
     charges_drawn: int
     loose_balls_recovered: int
+    box_outs: int
+    box_outs_off: int
+    box_outs_def: int
+    screen_assists: int
+    screen_assist_pts: int
 
     # Traditional stats for calculations
     points: int
     assists: int
     turnovers: int
+    steals: int
+    blocks: int
+    offensive_rebounds: int
+    defensive_rebounds: int
+    rebounds: int
+    fgm: int
+    fga: int
+    fg3m: int
+    fg3a: int
+    ftm: int
     fta: int
     minutes: Decimal
+    plus_minus: int
 
 
 class NBADataService:
@@ -166,11 +237,12 @@ class NBADataService:
 
                 time.sleep(delay)
 
-                # Make the API call with custom headers via session
-                # The nba_api library accepts custom_headers parameter
+                # Make the API call
+                # Note: We don't pass custom headers - the nba_api library
+                # has well-configured defaults (STATS_HEADERS) that work better
+                # Passing custom headers can cause timeout issues
                 endpoint = endpoint_class(
                     **kwargs,
-                    headers=self._session.headers,
                     timeout=settings.nba_api_timeout,
                 )
 
@@ -199,8 +271,26 @@ class NBADataService:
                     str(code) in str(e) for code in [500, 502, 503, 504]
                 )
 
+                # Check if timeout error (should retry)
+                is_timeout = any(
+                    indicator in error_str
+                    for indicator in ["timeout", "timed out", "read timed out"]
+                )
+
+                # Check if connection error (should retry)
+                is_connection_error = any(
+                    indicator in error_str
+                    for indicator in [
+                        "connection reset",
+                        "connection aborted",
+                        "connection refused",
+                        "broken pipe",
+                        "connectionreseterror",
+                    ]
+                )
+
                 endpoint_name = getattr(endpoint_class, "__name__", str(endpoint_class))
-                if is_rate_limit or is_server_error:
+                if is_rate_limit or is_server_error or is_timeout or is_connection_error:
                     logger.warning(
                         "Request to %s failed (attempt %d/%d): %s",
                         endpoint_name,
@@ -440,6 +530,255 @@ class NBADataService:
         redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
         return result
 
+    def get_lineup_stats(self, season: str = "2024-25") -> list[dict]:
+        """Get 5-man lineup stats for all teams.
+
+        Args:
+            season: NBA season string (e.g., "2024-25")
+
+        Returns:
+            List of lineup stat dictionaries
+
+        Raises:
+            CircuitBreakerError: If circuit breaker is open
+            RateLimitError: If rate limited after max retries
+        """
+        cache_key = self._get_cache_key(CacheKeyPrefix.NBA_LINEUP_STATS, season)
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info("Cache hit for lineup stats (season: %s)", season)
+                return cached
+
+        logger.info(
+            "Cache miss for lineup stats (season: %s), fetching from API", season
+        )
+        lineups = self._request_with_retry(
+            LeagueDashLineups,
+            season=season,
+            per_mode_detailed="Totals",
+            measure_type_detailed_defense="Base",
+            group_quantity=5,  # 5-man lineups
+        )
+        result = lineups.get_normalized_dict()["Lineups"]
+
+        # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_on_off_stats_for_team(
+        self, team_id: int, season: str = "2024-25"
+    ) -> tuple[list[dict], list[dict]]:
+        """Get on/off stats for a single team.
+
+        Args:
+            team_id: NBA team ID
+            season: NBA season string
+
+        Returns:
+            Tuple of (on_court_stats, off_court_stats)
+        """
+        data = self._request_with_retry(
+            TeamPlayerOnOffSummary,
+            team_id=team_id,
+            season=season,
+            per_mode_detailed="PerGame",
+            measure_type_detailed_defense="Base",
+        )
+        result = data.get_normalized_dict()
+        on_court = result.get("PlayersOnCourtTeamPlayerOnOffSummary", [])
+        off_court = result.get("PlayersOffCourtTeamPlayerOnOffSummary", [])
+        return on_court, off_court
+
+    def get_all_on_off_stats(
+        self,
+        season: str = "2024-25",
+        progress_callback: callable | None = None,
+    ) -> dict[int, PlayerOnOffData]:
+        """Get on/off stats for all players across all teams.
+
+        This method iterates through all 30 NBA teams to collect
+        on/off data for every player.
+
+        Args:
+            season: NBA season string
+            progress_callback: Optional callback(team_idx, total_teams, team_name)
+
+        Returns:
+            Dict keyed by player_id with PlayerOnOffData
+        """
+        cache_key = self._get_cache_key(CacheKeyPrefix.NBA_ON_OFF_STATS, season)
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info("Cache hit for on/off stats (season: %s)", season)
+                # Convert cached dict back to PlayerOnOffData objects
+                return {
+                    int(k): PlayerOnOffData(
+                        player_id=v["player_id"],
+                        player_name=v["player_name"],
+                        team_id=v["team_id"],
+                        team_abbreviation=v["team_abbreviation"],
+                        on_court_min=Decimal(str(v["on_court_min"])),
+                        on_court_plus_minus=Decimal(str(v["on_court_plus_minus"])),
+                        on_court_off_rating=Decimal(str(v["on_court_off_rating"])),
+                        on_court_def_rating=Decimal(str(v["on_court_def_rating"])),
+                        on_court_net_rating=Decimal(str(v["on_court_net_rating"])),
+                        off_court_min=Decimal(str(v["off_court_min"])),
+                        off_court_plus_minus=Decimal(str(v["off_court_plus_minus"])),
+                        off_court_off_rating=Decimal(str(v["off_court_off_rating"])),
+                        off_court_def_rating=Decimal(str(v["off_court_def_rating"])),
+                        off_court_net_rating=Decimal(str(v["off_court_net_rating"])),
+                        plus_minus_diff=Decimal(str(v["plus_minus_diff"])),
+                        off_rating_diff=Decimal(str(v["off_rating_diff"])),
+                        def_rating_diff=Decimal(str(v["def_rating_diff"])),
+                        net_rating_diff=Decimal(str(v["net_rating_diff"])),
+                    )
+                    for k, v in cached.items()
+                }
+
+        logger.info(
+            "Cache miss for on/off stats (season: %s), fetching from API", season
+        )
+
+        all_teams = nba_teams.get_teams()
+        combined: dict[int, PlayerOnOffData] = {}
+
+        for idx, team in enumerate(all_teams):
+            team_id = team["id"]
+            team_abbr = team["abbreviation"]
+            team_name = team["full_name"]
+
+            if progress_callback:
+                progress_callback(idx + 1, len(all_teams), team_name)
+
+            logger.info("Fetching on/off stats for %s (%d/%d)", team_abbr, idx + 1, len(all_teams))
+
+            try:
+                on_court, off_court = self.get_on_off_stats_for_team(team_id, season)
+
+                # Create lookup for off-court data
+                off_court_by_player = {p["VS_PLAYER_ID"]: p for p in off_court}
+
+                for player in on_court:
+                    player_id = player["VS_PLAYER_ID"]
+                    off_data = off_court_by_player.get(player_id, {})
+
+                    on_min = Decimal(str(player.get("MIN", 0) or 0))
+                    on_pm = Decimal(str(player.get("PLUS_MINUS", 0) or 0))
+                    on_off_rtg = Decimal(str(player.get("OFF_RATING", 0) or 0))
+                    on_def_rtg = Decimal(str(player.get("DEF_RATING", 0) or 0))
+                    on_net_rtg = Decimal(str(player.get("NET_RATING", 0) or 0))
+
+                    off_min = Decimal(str(off_data.get("MIN", 0) or 0))
+                    off_pm = Decimal(str(off_data.get("PLUS_MINUS", 0) or 0))
+                    off_off_rtg = Decimal(str(off_data.get("OFF_RATING", 0) or 0))
+                    off_def_rtg = Decimal(str(off_data.get("DEF_RATING", 0) or 0))
+                    off_net_rtg = Decimal(str(off_data.get("NET_RATING", 0) or 0))
+
+                    combined[player_id] = PlayerOnOffData(
+                        player_id=player_id,
+                        player_name=player.get("VS_PLAYER_NAME", ""),
+                        team_id=team_id,
+                        team_abbreviation=team_abbr,
+                        on_court_min=on_min,
+                        on_court_plus_minus=on_pm,
+                        on_court_off_rating=on_off_rtg,
+                        on_court_def_rating=on_def_rtg,
+                        on_court_net_rating=on_net_rtg,
+                        off_court_min=off_min,
+                        off_court_plus_minus=off_pm,
+                        off_court_off_rating=off_off_rtg,
+                        off_court_def_rating=off_def_rtg,
+                        off_court_net_rating=off_net_rtg,
+                        plus_minus_diff=on_pm - off_pm,
+                        off_rating_diff=on_off_rtg - off_off_rtg,
+                        def_rating_diff=on_def_rtg - off_def_rtg,
+                        net_rating_diff=on_net_rtg - off_net_rtg,
+                    )
+
+            except Exception as e:
+                logger.warning("Failed to fetch on/off stats for %s: %s", team_abbr, e)
+                continue
+
+        logger.info("Collected on/off data for %d players", len(combined))
+
+        # Cache the result (convert dataclasses to dicts for JSON serialization)
+        cache_data = {
+            str(k): {
+                "player_id": v.player_id,
+                "player_name": v.player_name,
+                "team_id": v.team_id,
+                "team_abbreviation": v.team_abbreviation,
+                "on_court_min": str(v.on_court_min),
+                "on_court_plus_minus": str(v.on_court_plus_minus),
+                "on_court_off_rating": str(v.on_court_off_rating),
+                "on_court_def_rating": str(v.on_court_def_rating),
+                "on_court_net_rating": str(v.on_court_net_rating),
+                "off_court_min": str(v.off_court_min),
+                "off_court_plus_minus": str(v.off_court_plus_minus),
+                "off_court_off_rating": str(v.off_court_off_rating),
+                "off_court_def_rating": str(v.off_court_def_rating),
+                "off_court_net_rating": str(v.off_court_net_rating),
+                "plus_minus_diff": str(v.plus_minus_diff),
+                "off_rating_diff": str(v.off_rating_diff),
+                "def_rating_diff": str(v.def_rating_diff),
+                "net_rating_diff": str(v.net_rating_diff),
+            }
+            for k, v in combined.items()
+        }
+        redis_cache.set(cache_key, cache_data, ttl=settings.cache_ttl_tracking_stats)
+
+        return combined
+
+    def fetch_lineup_data(self, season: str = "2024-25") -> list[LineupData]:
+        """Fetch and parse lineup data into LineupData objects.
+
+        Args:
+            season: NBA season string
+
+        Returns:
+            List of LineupData objects
+        """
+        raw_lineups = self.get_lineup_stats(season)
+        lineups: list[LineupData] = []
+
+        for lineup in raw_lineups:
+            # Parse GROUP_ID which contains player IDs
+            group_id = lineup.get("GROUP_ID", "")
+            # GROUP_ID format is typically "PLAYER_ID1 - PLAYER_ID2 - ..."
+            player_ids_str = group_id.replace(" ", "").split("-")
+            try:
+                player_ids = [int(pid) for pid in player_ids_str if pid]
+            except ValueError:
+                continue
+
+            # GROUP_NAME contains player names
+            group_name = lineup.get("GROUP_NAME", "")
+            player_names = [n.strip() for n in group_name.split("-")]
+
+            lineups.append(
+                LineupData(
+                    lineup_id="-".join(str(p) for p in sorted(player_ids)),
+                    player_ids=player_ids,
+                    player_names=player_names,
+                    team_id=lineup.get("TEAM_ID", 0),
+                    team_abbreviation=lineup.get("TEAM_ABBREVIATION", ""),
+                    games_played=lineup.get("GP", 0) or 0,
+                    minutes=Decimal(str(lineup.get("MIN", 0) or 0)),
+                    plus_minus=Decimal(str(lineup.get("PLUS_MINUS", 0) or 0)),
+                    off_rating=Decimal(str(lineup.get("OFF_RATING", 0) or 0)),
+                    def_rating=Decimal(str(lineup.get("DEF_RATING", 0) or 0)),
+                    net_rating=Decimal(str(lineup.get("NET_RATING", 0) or 0)),
+                )
+            )
+
+        return lineups
+
     def fetch_all_tracking_data(
         self,
         season: str = "2024-25",
@@ -496,6 +835,8 @@ class NBADataService:
                 player_id=player_id,
                 player_name=trad.get("PLAYER_NAME", ""),
                 team_abbreviation=trad.get("TEAM_ABBREVIATION", ""),
+                # Game info
+                games_played=trad.get("GP", 0) or 0,
                 # Offensive tracking
                 touches=touch.get("TOUCHES", 0) or 0,
                 front_court_touches=touch.get("FRONT_CT_TOUCHES", 0) or 0,
@@ -507,18 +848,34 @@ class NBADataService:
                     str(touch.get("AVG_DRIB_PER_TOUCH", 0) or 0)
                 ),
                 points_per_touch=Decimal(str(touch.get("PTS_PER_TOUCH", 0) or 0)),
-                # Defensive tracking (from hustle stats)
+                # Defensive/Hustle tracking
                 deflections=hust.get("DEFLECTIONS", 0) or 0,
                 contested_shots_2pt=hust.get("CONTESTED_SHOTS_2PT", 0) or 0,
                 contested_shots_3pt=hust.get("CONTESTED_SHOTS_3PT", 0) or 0,
                 charges_drawn=hust.get("CHARGES_DRAWN", 0) or 0,
                 loose_balls_recovered=hust.get("LOOSE_BALLS_RECOVERED", 0) or 0,
+                box_outs=hust.get("BOX_OUTS", 0) or 0,
+                box_outs_off=hust.get("OFF_BOXOUTS", 0) or 0,
+                box_outs_def=hust.get("DEF_BOXOUTS", 0) or 0,
+                screen_assists=hust.get("SCREEN_ASSISTS", 0) or 0,
+                screen_assist_pts=hust.get("SCREEN_AST_PTS", 0) or 0,
                 # Traditional stats
                 points=trad.get("PTS", 0) or 0,
                 assists=trad.get("AST", 0) or 0,
                 turnovers=trad.get("TOV", 0) or 0,
+                steals=trad.get("STL", 0) or 0,
+                blocks=trad.get("BLK", 0) or 0,
+                offensive_rebounds=trad.get("OREB", 0) or 0,
+                defensive_rebounds=trad.get("DREB", 0) or 0,
+                rebounds=trad.get("REB", 0) or 0,
+                fgm=trad.get("FGM", 0) or 0,
+                fga=trad.get("FGA", 0) or 0,
+                fg3m=trad.get("FG3M", 0) or 0,
+                fg3a=trad.get("FG3A", 0) or 0,
+                ftm=trad.get("FTM", 0) or 0,
                 fta=trad.get("FTA", 0) or 0,
                 minutes=Decimal(str(trad.get("MIN", 0) or 0)),
+                plus_minus=trad.get("PLUS_MINUS", 0) or 0,
             )
 
         logger.info("Combined data for %d players", len(combined))

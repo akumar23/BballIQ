@@ -28,10 +28,11 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import SessionLocal, engine
-from app.models import Player, SeasonStats
+from app.models import Per75Stats, Player, SeasonStats
 from app.models.base import Base
 from app.services.metrics import MetricsCalculator
 from app.services.nba_data import NBADataService, PlayerTrackingData, nba_data_service
+from app.services.per_75_calculator import per_75_calculator
 from app.services.rate_limiter import (
     CircuitBreakerError,
     RateLimitError,
@@ -286,23 +287,128 @@ def fetch_and_store_data(
                 )
                 db.add(season_stats)
 
-            # Update stats
+            # Update game info
+            season_stats.games_played = data.games_played
+            season_stats.total_minutes = data.minutes
+
+            # Update traditional box score stats
+            season_stats.total_points = data.points
+            season_stats.total_assists = data.assists
+            season_stats.total_rebounds = data.rebounds
+            season_stats.total_offensive_rebounds = data.offensive_rebounds
+            season_stats.total_defensive_rebounds = data.defensive_rebounds
+            season_stats.total_steals = data.steals
+            season_stats.total_blocks = data.blocks
+            season_stats.total_turnovers = data.turnovers
+            season_stats.total_fgm = data.fgm
+            season_stats.total_fga = data.fga
+            season_stats.total_fg3m = data.fg3m
+            season_stats.total_fg3a = data.fg3a
+            season_stats.total_ftm = data.ftm
+            season_stats.total_fta = data.fta
+            season_stats.total_plus_minus = data.plus_minus
+
+            # Update touch tracking stats
             season_stats.total_touches = data.touches
             season_stats.total_front_court_touches = data.front_court_touches
             season_stats.total_time_of_possession = data.time_of_possession
             season_stats.avg_points_per_touch = data.points_per_touch
+
+            # Update hustle/defensive stats
             season_stats.total_deflections = data.deflections
             season_stats.total_contested_shots = (
                 data.contested_shots_2pt + data.contested_shots_3pt
             )
+            season_stats.total_contested_shots_2pt = data.contested_shots_2pt
+            season_stats.total_contested_shots_3pt = data.contested_shots_3pt
             season_stats.total_charges_drawn = data.charges_drawn
             season_stats.total_loose_balls_recovered = data.loose_balls_recovered
-            season_stats.total_minutes = data.minutes
-            season_stats.total_points = data.points
-            season_stats.total_assists = data.assists
+            season_stats.total_box_outs = data.box_outs
+            season_stats.total_box_outs_off = data.box_outs_off
+            season_stats.total_box_outs_def = data.box_outs_def
+            season_stats.total_screen_assists = data.screen_assists
+            season_stats.total_screen_assist_pts = data.screen_assist_pts
+
+            # Store estimated possessions
+            season_stats.estimated_possessions = est_def_possessions
+
+            # Update calculated metrics
             season_stats.offensive_metric = offensive_metric
             season_stats.defensive_metric = defensive_metric
             season_stats.overall_metric = overall_metric
+
+            # Flush to get the season_stats ID for per_75_stats relationship
+            db.flush()
+
+            # Calculate and store per-75 stats
+            per_75_data = per_75_calculator.calculate_all(
+                possessions=est_def_possessions,
+                points=data.points,
+                fgm=data.fgm,
+                fga=data.fga,
+                fg3m=data.fg3m,
+                fg3a=data.fg3a,
+                ftm=data.ftm,
+                fta=data.fta,
+                assists=data.assists,
+                turnovers=data.turnovers,
+                rebounds=data.rebounds,
+                offensive_rebounds=data.offensive_rebounds,
+                defensive_rebounds=data.defensive_rebounds,
+                steals=data.steals,
+                blocks=data.blocks,
+                deflections=data.deflections,
+                contested_shots=data.contested_shots_2pt + data.contested_shots_3pt,
+                contested_2pt=data.contested_shots_2pt,
+                contested_3pt=data.contested_shots_3pt,
+                charges_drawn=data.charges_drawn,
+                loose_balls=data.loose_balls_recovered,
+                box_outs=data.box_outs,
+                screen_assists=data.screen_assists,
+                touches=data.touches,
+                front_court_touches=data.front_court_touches,
+            )
+
+            # Upsert per_75_stats
+            per_75_stats = (
+                db.query(Per75Stats)
+                .filter(Per75Stats.season_stats_id == season_stats.id)
+                .first()
+            )
+
+            if not per_75_stats:
+                per_75_stats = Per75Stats(
+                    season_stats_id=season_stats.id,
+                    season=season,
+                )
+                db.add(per_75_stats)
+
+            # Update per 75 stats
+            per_75_stats.pts_per_75 = per_75_data.pts_per_75
+            per_75_stats.fgm_per_75 = per_75_data.fgm_per_75
+            per_75_stats.fga_per_75 = per_75_data.fga_per_75
+            per_75_stats.fg3m_per_75 = per_75_data.fg3m_per_75
+            per_75_stats.fg3a_per_75 = per_75_data.fg3a_per_75
+            per_75_stats.ftm_per_75 = per_75_data.ftm_per_75
+            per_75_stats.fta_per_75 = per_75_data.fta_per_75
+            per_75_stats.ast_per_75 = per_75_data.ast_per_75
+            per_75_stats.tov_per_75 = per_75_data.tov_per_75
+            per_75_stats.reb_per_75 = per_75_data.reb_per_75
+            per_75_stats.oreb_per_75 = per_75_data.oreb_per_75
+            per_75_stats.dreb_per_75 = per_75_data.dreb_per_75
+            per_75_stats.stl_per_75 = per_75_data.stl_per_75
+            per_75_stats.blk_per_75 = per_75_data.blk_per_75
+            per_75_stats.deflections_per_75 = per_75_data.deflections_per_75
+            per_75_stats.contested_shots_per_75 = per_75_data.contested_shots_per_75
+            per_75_stats.contested_2pt_per_75 = per_75_data.contested_2pt_per_75
+            per_75_stats.contested_3pt_per_75 = per_75_data.contested_3pt_per_75
+            per_75_stats.charges_drawn_per_75 = per_75_data.charges_drawn_per_75
+            per_75_stats.loose_balls_per_75 = per_75_data.loose_balls_per_75
+            per_75_stats.box_outs_per_75 = per_75_data.box_outs_per_75
+            per_75_stats.screen_assists_per_75 = per_75_data.screen_assists_per_75
+            per_75_stats.touches_per_75 = per_75_data.touches_per_75
+            per_75_stats.front_court_touches_per_75 = per_75_data.front_court_touches_per_75
+            per_75_stats.possessions_used = per_75_data.possessions_used
 
             processed += 1
 
