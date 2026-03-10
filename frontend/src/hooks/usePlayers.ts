@@ -23,7 +23,7 @@ export function useLeaderboard(type: 'offensive' | 'defensive' | 'overall', seas
   })
 }
 
-export function usePerGameLeaderboard(sortBy: string, season?: string, limit = 5) {
+export function usePerGameLeaderboard(sortBy: string, season?: string, limit = 10) {
   return useQuery({
     queryKey: ['leaderboard', 'per-game', sortBy, season],
     queryFn: () => api.leaderboards.perGame(sortBy, season, limit),
