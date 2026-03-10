@@ -502,7 +502,12 @@ cd backend
 source .venv/bin/activate  # or .venv\Scripts\activate on Windows
 python -m scripts.fetch_data --season 2024-25
 ```
+To refresh with latest Impact Data:
 
+**With Docker**
+```bash
+docker exec -it nba-stats-backend python -m scripts.fetch_impact_data
+```
 ---
 
 ## Tech Stack
