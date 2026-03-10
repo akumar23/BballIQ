@@ -9,7 +9,7 @@ import logging
 import time
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, TypeVar
+from typing import Any, Optional, TypeVar
 
 from nba_api.stats.endpoints import (
     CommonAllPlayers,
@@ -598,7 +598,7 @@ class NBADataService:
     def get_all_on_off_stats(
         self,
         season: str = "2024-25",
-        progress_callback: callable | None = None,
+        progress_callback: Optional[callable] = None,
     ) -> dict[int, PlayerOnOffData]:
         """Get on/off stats for all players across all teams.
 
@@ -870,6 +870,15 @@ class NBADataService:
                 ftm=trad.get("FTM", 0) or 0,
                 minutes=Decimal(str(trad.get("MIN", 0) or 0)),
                 plus_minus=trad.get("PLUS_MINUS", 0) or 0,
+                steals=trad.get("STL", 0) or 0,
+                blocks=trad.get("BLK", 0) or 0,
+                offensive_rebounds=trad.get("OREB", 0) or 0,
+                defensive_rebounds=trad.get("DREB", 0) or 0,
+                rebounds=trad.get("REB", 0) or 0,
+                fgm=trad.get("FGM", 0) or 0,
+                fga=trad.get("FGA", 0) or 0,
+                fg3m=trad.get("FG3M", 0) or 0,
+                fg3a=trad.get("FG3A", 0) or 0,
             )
 
         logger.info("Combined data for %d players", len(combined))

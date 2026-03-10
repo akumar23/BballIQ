@@ -23,6 +23,21 @@ export interface Player {
   metrics: PlayerMetrics | null
 }
 
+export interface PlayerPerGameStats {
+  id: number
+  nba_id: number
+  name: string
+  position: string | null
+  team_abbreviation: string | null
+  games_played: number | null
+  ppg: number | null
+  rpg: number | null
+  apg: number | null
+  mpg: number | null
+  spg: number | null
+  bpg: number | null
+}
+
 export interface PlayerDetail extends Player {
   season: string
   games_played: number | null

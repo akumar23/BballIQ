@@ -1,4 +1,4 @@
-import type { ImpactLeaderboardEntry, Player, PlayerDetail, PlayerImpact } from '@/types'
+import type { ImpactLeaderboardEntry, Player, PlayerDetail, PlayerImpact, PlayerPerGameStats } from '@/types'
 
 const API_BASE = '/api'
 
@@ -32,6 +32,8 @@ export const api = {
       fetchJson<Player[]>(`/leaderboards/defensive?limit=${limit}${season ? `&season=${season}` : ''}`),
     overall: (season?: string, limit = 50) =>
       fetchJson<Player[]>(`/leaderboards/overall?limit=${limit}${season ? `&season=${season}` : ''}`),
+    perGame: (sortBy: string, season?: string, limit = 5) =>
+      fetchJson<PlayerPerGameStats[]>(`/leaderboards/per-game?sort_by=${sortBy}&limit=${limit}${season ? `&season=${season}` : ''}`),
   },
   impact: {
     leaderboard: (season?: string, sortBy: 'net' | 'offense' | 'defense' = 'net', limit = 50) =>

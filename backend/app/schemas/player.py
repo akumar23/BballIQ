@@ -34,6 +34,24 @@ class PlayerTrackingStats(BaseModel):
     contested_shots: int | None
 
 
+class PlayerPerGameStats(BaseModel):
+    id: int
+    nba_id: int
+    name: str
+    position: str | None
+    team_abbreviation: str | None
+    games_played: int | None
+    ppg: Decimal | None
+    rpg: Decimal | None
+    apg: Decimal | None
+    mpg: Decimal | None
+    spg: Decimal | None
+    bpg: Decimal | None
+
+    class Config:
+        from_attributes = True
+
+
 class PlayerDetail(PlayerList):
     season: str
     games_played: int | None
