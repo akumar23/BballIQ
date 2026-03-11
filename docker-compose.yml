@@ -51,6 +51,46 @@ services:
         condition: service_healthy
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
+  # Celery Worker
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nba-stats-celery-worker
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/nba_stats
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      NBA_API_CACHE_DIR: /app/data/nba_api_cache
+    volumes:
+      - ./backend:/app
+      - nba_api_cache:/app/data/nba_api_cache
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.core.celery_app worker --loglevel=info --queues=data_refresh --concurrency=1
+
+  # Celery Beat Scheduler
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nba-stats-celery-beat
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/nba_stats
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - redis
+      - celery-worker
+    command: celery -A app.core.celery_app beat --loglevel=info
+
   # React Frontend
   frontend:
     build:
