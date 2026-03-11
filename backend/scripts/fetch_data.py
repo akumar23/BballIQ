@@ -29,7 +29,6 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import SessionLocal, engine
 from app.models import Per75Stats, Player, SeasonStats
-from app.models.base import Base
 from app.services.metrics import MetricsCalculator
 from app.services.nba_data import NBADataService, PlayerTrackingData, nba_data_service
 from app.services.per_75_calculator import per_75_calculator
@@ -65,12 +64,27 @@ def setup_logging(verbose: bool = False) -> None:
 
 
 def create_tables() -> None:
-    """Create all database tables."""
-    print("Creating database tables...")
-    logger.info("Creating database tables...")
-    Base.metadata.create_all(bind=engine)
-    print("Done.")
-    logger.info("Database tables created successfully")
+    """Run Alembic migrations to create/update database tables."""
+    import subprocess
+
+    print("Running database migrations...")
+    logger.info("Running database migrations...")
+    try:
+        result = subprocess.run(
+            ["alembic", "upgrade", "head"],
+            cwd=Path(__file__).parent.parent,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        if result.stdout:
+            print(result.stdout)
+        print("Done.")
+        logger.info("Database migrations completed successfully")
+    except subprocess.CalledProcessError as e:
+        logger.error("Migration failed: %s", e.stderr)
+        print(f"[ERROR] Migration failed: {e.stderr}")
+        raise
 
 
 def fetch_tracking_data_with_recovery(

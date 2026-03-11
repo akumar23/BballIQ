@@ -527,9 +527,67 @@ python -m scripts.fetch_play_type_data --season 2024-25
 
 ---
 
+## Database Migrations
+
+This project uses [Alembic](https://alembic.sqlalchemy.org/) for database schema migrations.
+
+### Running Migrations
+
+**With Docker:**
+```bash
+docker-compose exec backend alembic upgrade head
+```
+
+**Without Docker:**
+```bash
+cd backend
+source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+alembic upgrade head
+```
+
+### Creating New Migrations
+
+After modifying SQLAlchemy models, generate a new migration:
+
+```bash
+cd backend
+alembic revision --autogenerate -m "Description of changes"
+```
+
+Review the generated migration in `alembic/versions/` before applying.
+
+### Common Migration Commands
+
+```bash
+# Apply all pending migrations
+alembic upgrade head
+
+# Rollback one migration
+alembic downgrade -1
+
+# View migration history
+alembic history
+
+# View current revision
+alembic current
+
+# Generate migration without applying
+alembic revision --autogenerate -m "Your message"
+```
+
+### Migration Workflow
+
+1. Modify models in `app/models/`
+2. Run `alembic revision --autogenerate -m "Description"`
+3. Review generated migration file
+4. Apply with `alembic upgrade head`
+5. Commit migration file to version control
+
+---
+
 ## Tech Stack
 
-- **Backend**: Python 3.11, FastAPI, SQLAlchemy, PostgreSQL
+- **Backend**: Python 3.11, FastAPI, SQLAlchemy, PostgreSQL, Alembic
 - **Frontend**: React 18, TypeScript, Vite, TailwindCSS, TanStack Query
 - **Data Sources**: NBA Stats API (via nba_api), PBP Stats (via pbpstats)
 
