@@ -1,4 +1,5 @@
 import type { ImpactLeaderboardEntry, Player, PlayerDetail, PlayerImpact, PlayerPerGameStats } from '@/types'
+import type { PlayTypeKey, PlayTypeLeaderboardResponse, PlayTypeSortBy, PlayerPlayTypeStats } from '@/types/playType'
 
 const API_BASE = '/api'
 
@@ -47,6 +48,26 @@ export const api = {
     get: (playerId: number, season?: string) => {
       const query = season ? `?season=${season}` : ''
       return fetchJson<PlayerImpact>(`/impact/players/${playerId}${query}`)
+    },
+  },
+  playTypes: {
+    leaderboard: (
+      playType: PlayTypeKey = 'isolation',
+      sortBy: PlayTypeSortBy = 'ppp',
+      season?: string,
+      limit = 50,
+      minPoss = 50
+    ) =>
+      fetchJson<PlayTypeLeaderboardResponse>(
+        `/play-types/leaderboard?play_type=${playType}&sort_by=${sortBy}&limit=${limit}&min_poss=${minPoss}${season ? `&season=${season}` : ''}`
+      ),
+    list: (season?: string, limit = 50, offset = 0) =>
+      fetchJson<PlayerPlayTypeStats[]>(
+        `/play-types/players?limit=${limit}&offset=${offset}${season ? `&season=${season}` : ''}`
+      ),
+    get: (playerId: number, season?: string) => {
+      const query = season ? `?season=${season}` : ''
+      return fetchJson<PlayerPlayTypeStats>(`/play-types/players/${playerId}${query}`)
     },
   },
 }

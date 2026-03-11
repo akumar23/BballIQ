@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import impact, leaderboards, players
+from app.api.routes import impact, leaderboards, play_types, players
 from app.core.config import settings
 
 app = FastAPI(
@@ -21,6 +21,7 @@ app.add_middleware(
 app.include_router(players.router, prefix="/api/players", tags=["players"])
 app.include_router(leaderboards.router, prefix="/api/leaderboards", tags=["leaderboards"])
 app.include_router(impact.router, prefix="/api/impact", tags=["impact"])
+app.include_router(play_types.router, prefix="/api/play-types", tags=["play-types"])
 
 
 @app.get("/health")

@@ -21,6 +21,9 @@ export default function Layout({ children }: LayoutProps) {
               <Link to="/impact" className="text-gray-600 hover:text-gray-900">
                 Impact
               </Link>
+              <Link to="/play-types" className="text-gray-600 hover:text-gray-900">
+                Play Types
+              </Link>
               <Link to="/players" className="text-gray-600 hover:text-gray-900">
                 Players
               </Link>
