@@ -9,7 +9,7 @@ celery_app = Celery(
     "nba_stats",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["app.tasks.data_refresh"],
+    include=["app.tasks.data_refresh", "app.tasks.metrics"],
 )
 
 celery_app.conf.update(
@@ -47,4 +47,5 @@ celery_app.conf.beat_schedule = {
 # Task routing
 celery_app.conf.task_routes = {
     "app.tasks.data_refresh.*": {"queue": "data_refresh"},
+    "app.tasks.metrics.*": {"queue": "data_refresh"},
 }

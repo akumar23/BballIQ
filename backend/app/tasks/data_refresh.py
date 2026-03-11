@@ -600,7 +600,8 @@ def refresh_play_type_data(self, season: str | None = None) -> dict:
 def daily_data_refresh(self, season: str | None = None) -> dict:
     """Orchestrate the full daily data refresh.
 
-    Runs tracking data first, then impact and play type data in parallel.
+    Runs tracking data first, then impact and play type data in parallel,
+    followed by metric recalculation.
 
     Args:
         season: NBA season string. Defaults to current season.
@@ -608,16 +609,19 @@ def daily_data_refresh(self, season: str | None = None) -> dict:
     Returns:
         dict with overall status
     """
+    from app.tasks.metrics import recalculate_metrics
+
     season = season or get_current_season()
     logger.info("Starting daily data refresh for season %s", season)
 
-    # Chain: tracking first, then group of impact + play_type
+    # Chain: tracking first, then group of impact + play_type, then recalculate metrics
     workflow = chain(
         refresh_tracking_data.s(season),
         group(
             refresh_impact_data.s(season),
             refresh_play_type_data.s(season),
         ),
+        recalculate_metrics.si(season),  # si() ignores previous result
     )
 
     result = workflow.apply_async()
