@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     circuit_breaker_recovery_timeout: float = 60.0  # Seconds before attempting recovery
     circuit_breaker_half_open_max_calls: int = 3  # Calls allowed in half-open state
 
+    # Celery Configuration
+    celery_broker_url: str = "redis://localhost:6379/1"
+    celery_result_backend: str = "redis://localhost:6379/2"
+    celery_task_time_limit: int = 3600  # 1 hour hard limit
+    celery_task_soft_time_limit: int = 3300  # 55 min soft limit
+    celery_schedule_hour: int = 6  # Hour to run daily refresh (UTC)
+    celery_schedule_minute: int = 0  # Minute to run daily refresh
+
     class Config:
         env_file = ".env"
 
