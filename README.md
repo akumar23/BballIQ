@@ -473,7 +473,9 @@ nba-advanced-stats/
 │   │   ├── api/routes/          ← API endpoints
 │   │   └── services/            ← Data fetching & metrics
 │   └── scripts/
-│       └── fetch_data.py        ← Data loading script
+│       ├── fetch_data.py            ← Main data loading script
+│       ├── fetch_impact_data.py     ← Impact/on-off data script
+│       └── fetch_play_type_data.py  ← Play type stats script
 │
 └── frontend/                ← React/TypeScript UI
     ├── Dockerfile
@@ -508,6 +510,21 @@ To refresh with latest Impact Data:
 ```bash
 docker exec -it nba-stats-backend python -m scripts.fetch_impact_data
 ```
+
+To refresh with latest Play Type Data (Isolation, PnR, Spot-up, etc.):
+
+**With Docker**
+```bash
+docker exec -it nba-stats-backend python -m scripts.fetch_play_type_data
+```
+
+**Without Docker:**
+```bash
+cd backend
+source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+python -m scripts.fetch_play_type_data --season 2024-25
+```
+
 ---
 
 ## Tech Stack

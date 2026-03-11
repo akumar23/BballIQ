@@ -38,6 +38,7 @@ class CacheKeyPrefix(str, Enum):
     NBA_TRACKING_DATA = "nba:tracking_data"
     NBA_LINEUP_STATS = "nba:lineup_stats"
     NBA_ON_OFF_STATS = "nba:on_off_stats"
+    NBA_PLAY_TYPE_STATS = "nba:play_type_stats"
     PBP_SEASON_TOTALS = "pbp:season_totals"
     PBP_GAME_POSSESSIONS = "pbp:game_possessions"
 
