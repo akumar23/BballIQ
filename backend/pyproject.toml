@@ -1,7 +1,7 @@
 [project]
-name = "nba-advanced-stats"
+name = "courtvision"
 version = "0.1.0"
-description = "Advanced NBA statistics with per-touch offensive and defensive metrics"
+description = "Per-touch offensive and defensive metrics for every NBA player"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.109.0",

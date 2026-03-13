@@ -1,4 +1,4 @@
-"""Services module for NBA Advanced Stats.
+"""Services module for CourtVision.
 
 This module provides:
 - NBA API data fetching with rate limiting

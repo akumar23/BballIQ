@@ -1,4 +1,4 @@
-# NBA Advanced Stats - Project Tickets
+# CourtVision - Project Tickets
 
 ## Backend Tickets
 
