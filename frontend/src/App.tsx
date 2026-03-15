@@ -6,6 +6,7 @@ import LeaderboardPage from './pages/LeaderboardPage'
 import LeagueLeadersPage from './pages/LeagueLeadersPage'
 import ImpactPage from './pages/ImpactPage'
 import PlayTypesPage from './pages/PlayTypesPage'
+import PlayerCardPage from './pages/PlayerCardPage'
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
         <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/impact" element={<ImpactPage />} />
         <Route path="/play-types" element={<PlayTypesPage />} />
+        <Route path="/player-card" element={<PlayerCardPage />} />
       </Routes>
     </Layout>
   )

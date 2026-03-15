@@ -30,6 +30,9 @@ export default function Layout({ children }: LayoutProps) {
               <Link to="/league-leaders" className="text-gray-600 hover:text-gray-900">
                 League Leaders
               </Link>
+              <Link to="/player-card" className="text-gray-600 hover:text-gray-900">
+                Player Card
+              </Link>
             </div>
           </div>
         </nav>
