@@ -12,7 +12,7 @@ export default function Layout({ children }: LayoutProps) {
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <Link to="/" className="text-xl font-bold text-gray-900">
-              NBA Advanced Stats
+              CourtVision
             </Link>
             <div className="flex gap-6">
               <Link to="/leaderboard" className="text-gray-600 hover:text-gray-900">
@@ -29,6 +29,9 @@ export default function Layout({ children }: LayoutProps) {
               </Link>
               <Link to="/league-leaders" className="text-gray-600 hover:text-gray-900">
                 League Leaders
+              </Link>
+              <Link to="/player-card" className="text-gray-600 hover:text-gray-900">
+                Player Card
               </Link>
             </div>
           </div>

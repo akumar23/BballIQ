@@ -1,4 +1,4 @@
-"""Celery tasks for NBA Advanced Stats."""
+"""Celery tasks for CourtVision."""
 
 from app.tasks.data_refresh import (
     daily_data_refresh,
