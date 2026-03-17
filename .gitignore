@@ -21,7 +21,7 @@ build/
 *.swo
 
 # Data cache
-data/
+/data/
 *.db
 
 # Logs

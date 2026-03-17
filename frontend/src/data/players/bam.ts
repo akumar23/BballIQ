@@ -1,0 +1,147 @@
+import type { CortexPlayer } from '../cortexTypes'
+
+export const bam: CortexPlayer = {
+  id: 'bam', name: 'Bam Adebayo', team: 'MIA Heat', position: 'C', age: 27, number: 13, mpg: 33.4,
+  traditional: { ppg: 20.8, rpg: 10.2, apg: 4.8, spg: 1.2, bpg: 0.9, fgPct: 0.518, threePct: 0.182, ftPct: 0.802, tov: 2.8 },
+  advanced: { per: 22.4, ts: 0.572, ws48: 0.172, bpm: 4.2, vorp: 3.8, ortg: 114, drtg: 104, usg: 24.8, ows: 5.2, dws: 4.8 },
+  impact: {
+    onOff: { onORtg: 114, offORtg: 108, onDRtg: 104, offDRtg: 112, netSwing: 14.0 },
+    luck: { xWins: 46, actualWins: 44, clutchEPA: 1.2, garbageTimePts: 0.6 },
+    rapm: 3.2, rpm: 3.8, epm: 4.1, raptor: 3.6, lebron: 4.2, darko: 3.4,
+    contextualized: {
+      rawNetRtg: 8.0, contextualizedNetRtg: 6.2, percentile: 78,
+      adjustments: [
+        { name: 'Raw On/Off Net Rtg', value: 8.0, cumulative: 8.0, explanation: 'Solid on/off driven primarily by defensive impact' },
+        { name: 'Teammate Quality Adj', value: -0.8, cumulative: 7.2, explanation: 'Butler and Herro are solid but not elite' },
+        { name: 'Opponent Starter Adj', value: 0.4, cumulative: 7.6, explanation: 'Faces starters at standard rate' },
+        { name: 'Garbage Time Filter', value: -0.6, cumulative: 7.0, explanation: 'Minimal garbage time — Heat games are competitive' },
+        { name: 'Score Leverage Adj', value: 0.2, cumulative: 7.2, explanation: 'Slight bump — Heat culture favors high-leverage play' },
+        { name: 'Pace & Possession Adj', value: -1.0, cumulative: 6.2, explanation: 'Heat play slightly slow — pace adjustment reduces raw number' },
+      ],
+    },
+  },
+  playtype: {
+    iso: { freq: 4.8, ppp: 0.88, rank: 82, efg: 0.40 },
+    pnr_ball: { freq: 6.2, ppp: 0.92, rank: 58, efg: 0.42 },
+    spot_up: { freq: 4.2, ppp: 0.82, rank: 148, efg: 0.38 },
+    transition: { freq: 14.2, ppp: 1.18, rank: 12, efg: 0.58 },
+    post_up: { freq: 22.8, ppp: 0.98, rank: 12, efg: 0.46 },
+    cut: { freq: 18.2, ppp: 1.34, rank: 8, efg: 0.70 },
+    off_screen: { freq: 5.8, ppp: 0.90, rank: 52, efg: 0.42 },
+    handoff: { freq: 15.8, ppp: 1.04, rank: 8, efg: 0.50 },
+  },
+  shotZones: [
+    { zone: 'Rim', fga: 6.8, fgPct: 0.648, freq: 34.2, leagueAvg: 0.628 },
+    { zone: 'Short Mid', fga: 4.8, fgPct: 0.462, freq: 24.1, leagueAvg: 0.422 },
+    { zone: 'Long Mid', fga: 3.2, fgPct: 0.398, freq: 16.1, leagueAvg: 0.408 },
+    { zone: 'Corner 3', fga: 0.4, fgPct: 0.208, freq: 2.0, leagueAvg: 0.381 },
+    { zone: 'Above Break 3', fga: 1.2, fgPct: 0.172, freq: 6.0, leagueAvg: 0.358 },
+    { zone: 'FT', fga: 3.5, fgPct: 0.802, freq: 17.6, leagueAvg: 0.782 },
+  ],
+  defensive: {
+    overview: { dRapm: 3.8, contestRate: 74.2, dfgPctDiff: -5.8, stlRate: 1.4, blkRate: 1.2, deflections: 3.2, rank: 4 },
+    perimeter: {
+      onBallDfg: 35.8, pullUpDfg: 34.2, catchShootDfg: 33.8,
+      onBallDfgDiff: -7.6, pullUpDfgDiff: -7.4, catchShootDfgDiff: -3.9,
+      tightContestRate: 76.8, screenNavRate: 88.4, avgContestDist: 3.0, dribblePctAllowed: 24.8,
+      scoutingReport: 'Most switchable big in the NBA. Can guard 1-5 and stay with elite guards on the perimeter. Screen navigation is elite — fights over and under with equal skill.',
+    },
+    isolation: {
+      isoDfg: 35.8, isoPpp: 0.74, isoRank: 4, possessions: 132,
+      tovForcedPct: 12.8, freqTargeted: 9.2,
+      byZone: [
+        { zone: 'At Rim', dfgPct: 42.8, freq: 30 },
+        { zone: 'Mid-Range', dfgPct: 33.2, freq: 45 },
+        { zone: 'Three', dfgPct: 28.4, freq: 25 },
+      ],
+      scoutingReport: 'Elite iso defender across all matchup types. Strength to body up bigs, quickness to stay with guards.',
+    },
+    rimProtection: { contestsPerGame: 4.2, dfgPctAtRim: 52.4, diffVsLeague: -10.4 },
+    matchupLog: [
+      { opponent: 'Jayson Tatum', possessions: 52, dfgPct: 34.2, ptsAllowed: 18 },
+      { opponent: 'Giannis Antetokounmpo', possessions: 48, dfgPct: 42.8, ptsAllowed: 26 },
+      { opponent: 'Paolo Banchero', possessions: 44, dfgPct: 36.4, ptsAllowed: 16 },
+    ],
+  },
+  timeline: [
+    { season: '2020-21', per: 19.8, ws48: 0.148, bpm: 2.8, epm: 2.4 },
+    { season: '2021-22', per: 20.2, ws48: 0.152, bpm: 3.2, epm: 2.8 },
+    { season: '2022-23', per: 22.8, ws48: 0.178, bpm: 4.8, epm: 4.2 },
+    { season: '2023-24', per: 21.8, ws48: 0.168, bpm: 4.0, epm: 3.8 },
+    { season: '2024-25', per: 22.4, ws48: 0.172, bpm: 4.2, epm: 4.1 },
+  ],
+  radarData: [
+    { stat: 'Scoring', value: 52 }, { stat: 'Playmaking', value: 68 },
+    { stat: 'Defense', value: 95 }, { stat: 'Efficiency', value: 62 },
+    { stat: 'Volume', value: 58 }, { stat: 'Durability', value: 88 },
+    { stat: 'Clutch', value: 55 }, { stat: 'Versatility', value: 92 },
+  ],
+  portability: {
+    index: 88, grade: 'A', description: 'Most switchable big in the league. Fits any defensive scheme. Offensive limitations reduce alpha portability but elite as a #2/#3.',
+    subScores: { selfCreation: 42, schemeFlexibility: 85, defensiveSwitchability: 98, lowDependency: 72 },
+    selfCreation: { unassistedPct: 35, assistedPct: 65, selfCreatedPpp: 0.84, gravityIndex: 5.2, analysis: 'Limited self-creation scoring. Relies on cuts, rolls, and handoffs rather than isolation scoring.' },
+    schemeCompatibility: [
+      { scheme: 'Motion/Read', fitScore: 92, note: 'Excellent passer from the elbow — motion offense fits perfectly' },
+      { scheme: 'PnR Heavy', fitScore: 88, note: 'Elite roll man and short-roll passer' },
+      { scheme: 'Iso-Heavy', fitScore: 45, note: 'Cannot be an isolation scorer — limited in iso-centric offense' },
+      { scheme: 'Egalitarian', fitScore: 90, note: 'Natural connector — thrives with ball movement' },
+      { scheme: 'Post-Up', fitScore: 72, note: 'Decent post game but not dominant enough to anchor post offense' },
+    ],
+    teammateDependency: { eliteSpacingTS: 0.592, poorSpacingTS: 0.538, spacingDelta: 5.4, withRimProtectorFg: 0.518, withoutRimProtectorFg: 0.518, dependencyScore: 32 },
+    defensiveSwitchability: { guardablePositions: ['PG', 'SG', 'SF', 'PF', 'C'], switchScore: 98, perimeterDfgDiff: -7.6, pnrNavigation: 88, scoutingNote: 'Guards all 5 positions at elite level. The gold standard for defensive switching in the modern NBA.' },
+    projectedFits: [
+      { team: 'Boston Celtics', archetype: 'Egalitarian', projectedNetRtg: 7.8, deltaFromCurrent: 1.6, fitScore: 96, reasoning: 'Defensive versatility + ball movement = perfect fit' },
+      { team: 'OKC Thunder', archetype: 'Motion/Read', projectedNetRtg: 7.2, deltaFromCurrent: 1.0, fitScore: 94, reasoning: 'Defensive anchor behind SGA — elite complementary piece' },
+      { team: 'New York Knicks', archetype: 'Iso-Heavy', projectedNetRtg: 5.8, deltaFromCurrent: -0.4, fitScore: 82, reasoning: 'Defensive anchor but limited offensive fit with Brunson iso-heavy system' },
+      { team: 'Denver Nuggets', archetype: 'Motion/Read', projectedNetRtg: 6.4, deltaFromCurrent: 0.2, fitScore: 88, reasoning: 'Defensive upgrade over Jokic lineups — passing ability fits Denver motion' },
+    ],
+    historicalComps: [
+      { player: 'Ben Wallace (2004)', similarity: 68, portabilityScore: 82, analysis: 'Defensive anchor with limited offense — Wallace won as DPOY, not as a #1 scorer' },
+      { player: 'Draymond Green (2017)', similarity: 82, portabilityScore: 86, analysis: 'Most direct comp — switchable DPOY-caliber defender who connects offense through passing' },
+    ],
+  },
+  championship: {
+    index: 45, tier: 'CHAMPIONSHIP PIECE',
+    verdict: 'Elite defensive piece but not a championship #1 option. Limited offensive creation and no 3PT shot cap his ceiling as an alpha. Best suited as the #2/#3 on a title team — think Draymond with more scoring.',
+    winProbability: 3.8, historicalBaseRate: 3.3, multiplier: 1.2,
+    pillars: [
+      { name: 'Playoff Scoring Projection', score: 38, weight: 25, explanation: 'Cannot create enough offense to be a #1 — 20 PPG ceiling in playoffs' },
+      { name: 'Two-Way Impact', score: 82, weight: 20, explanation: 'Elite defense but one-sided impact — offense drags total down' },
+      { name: 'Clutch & Pressure', score: 48, weight: 15, explanation: 'Playoff experience but limited closing ability — not a go-to scorer' },
+      { name: 'Portability / Roster Flexibility', score: 88, weight: 15, explanation: 'Fits anywhere as a defender — elite portability as a piece' },
+      { name: 'Durability & Availability', score: 85, weight: 10, explanation: 'Iron man — rarely misses games' },
+      { name: 'Playoff Experience & Growth Arc', score: 72, weight: 10, explanation: 'NBA Finals experience with Heat — knows the stage' },
+      { name: 'Supporting Cast Threshold', score: 28, weight: 5, explanation: 'Needs a true #1 scorer — Heat don\'t have one post-Butler' },
+    ],
+    playoffProjection: {
+      ppg: 18.8, ts: 0.548, ast: 4.2, drtg: 105,
+      regToPlayoffDrop: { ppg: -2.0, ts: -0.024, ast: -0.6, drtg: 1.0 },
+      comparisonNote: 'Similar to Draymond\'s playoff profile — defensive anchor with modest scoring. Needs elite scorers around him.',
+    },
+    supportingCast: {
+      min2ndOption: 'N/A — Bam needs to BE the 2nd option, not the 1st', spacingNeed: 'Critical — zero 3PT gravity',
+      defensiveNeed: 'Low — he is the defensive anchor', capFlexibility: 'Limited — max contract limits roster building',
+      blueprint: 'Elite #1 scorer (SGA/Luka tier) + 3PT shooters + Bam as defensive anchor and connector. 2023 Heat model needed Butler as #1.',
+    },
+    comparables: [
+      { player: 'Draymond Green', year: '2015', role: '#3 Option', castStrength: 95, championshipIndex: 42, won: true, analysis: 'Won as DPOY-level defender with Curry/Klay carrying offense' },
+      { player: 'Ben Wallace', year: '2004', role: '#2 Option', castStrength: 68, championshipIndex: 38, won: true, analysis: 'Won title as defensive anchor with balanced scoring cast' },
+      { player: 'Al Horford', year: '2018', role: '#1 Option', castStrength: 58, championshipIndex: 35, won: false, analysis: 'Similar defensive big who couldn\'t carry as #1 — needed Tatum/Brown to mature' },
+      { player: 'Marc Gasol', year: '2013', role: '#1 Option', castStrength: 62, championshipIndex: 42, won: false, analysis: 'DPOY center with limited offense — peaked as #2 in Toronto' },
+    ],
+  },
+  opponentTier: [
+    { tier: 'Elite Starters', netRtg: 2.8, minutes: 388, weight: 1.0 },
+    { tier: 'Quality Starters', netRtg: 6.4, minutes: 628, weight: 0.8 },
+    { tier: 'Role Players', netRtg: 10.2, minutes: 478, weight: 0.6 },
+    { tier: 'Bench/Deep', netRtg: 14.8, minutes: 262, weight: 0.4 },
+  ],
+  lineupContext: {
+    topLineups: [
+      { players: ['Herro', 'Robinson', 'Jaquez', 'Bam', 'Highsmith'], minutes: 342, rawNet: 8.2, ctxNet: 5.8, oppTier: 'Mixed' },
+      { players: ['Herro', 'Robinson', 'Jaquez', 'Bam', 'Love'], minutes: 198, rawNet: 6.4, ctxNet: 4.2, oppTier: 'Quality' },
+      { players: ['Rozier', 'Herro', 'Jaquez', 'Bam', 'Highsmith'], minutes: 168, rawNet: 4.8, ctxNet: 3.4, oppTier: 'Mixed' },
+    ],
+    withoutTopTeammate: { teammate: 'Tyler Herro', netRtg: 3.2, minutes: 288 },
+  },
+}

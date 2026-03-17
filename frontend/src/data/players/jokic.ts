@@ -1,0 +1,147 @@
+import type { CortexPlayer } from '../cortexTypes'
+
+export const jokic: CortexPlayer = {
+  id: 'jokic', name: 'Nikola Jokic', team: 'DEN Nuggets', position: 'C', age: 29, number: 15, mpg: 33.8,
+  traditional: { ppg: 26.4, rpg: 12.4, apg: 9.8, spg: 1.4, bpg: 0.8, fgPct: 0.562, threePct: 0.382, ftPct: 0.818, tov: 3.4 },
+  advanced: { per: 32.8, ts: 0.662, ws48: 0.312, bpm: 13.1, vorp: 10.2, ortg: 128, drtg: 112, usg: 29.8, ows: 13.8, dws: 2.8 },
+  impact: {
+    onOff: { onORtg: 128, offORtg: 108, onDRtg: 112, offDRtg: 110, netSwing: 18.0 },
+    luck: { xWins: 52, actualWins: 50, clutchEPA: 2.8, garbageTimePts: 0.8 },
+    rapm: 8.2, rpm: 9.4, epm: 10.2, raptor: 9.8, lebron: 9.1, darko: 7.5,
+    contextualized: {
+      rawNetRtg: 14.0, contextualizedNetRtg: 9.2, percentile: 98,
+      adjustments: [
+        { name: 'Raw On/Off Net Rtg', value: 14.0, cumulative: 14.0, explanation: 'Massive on/off — Denver\'s offense craters without him' },
+        { name: 'Teammate Quality Adj', value: -2.8, cumulative: 11.2, explanation: 'Murray, MPJ, Gordon form a strong supporting cast' },
+        { name: 'Opponent Starter Adj', value: 0.8, cumulative: 12.0, explanation: 'Faces starting centers at standard rate' },
+        { name: 'Garbage Time Filter', value: -1.2, cumulative: 10.8, explanation: 'Some blowout inflation removed' },
+        { name: 'Score Leverage Adj', value: -0.4, cumulative: 10.4, explanation: 'Slight reduction — performs well but not as clutch-heavy' },
+        { name: 'Pace & Possession Adj', value: -1.2, cumulative: 9.2, explanation: 'Denver plays at above-average pace — normalizing reduces raw number' },
+      ],
+    },
+  },
+  playtype: {
+    iso: { freq: 5.2, ppp: 1.02, rank: 18, efg: 0.48 },
+    pnr_ball: { freq: 8.4, ppp: 1.18, rank: 2, efg: 0.56 },
+    spot_up: { freq: 6.1, ppp: 1.22, rank: 8, efg: 0.58 },
+    transition: { freq: 12.8, ppp: 1.28, rank: 3, efg: 0.64 },
+    post_up: { freq: 28.2, ppp: 1.12, rank: 1, efg: 0.54 },
+    cut: { freq: 10.4, ppp: 1.38, rank: 6, efg: 0.72 },
+    off_screen: { freq: 3.2, ppp: 0.98, rank: 42, efg: 0.45 },
+    handoff: { freq: 16.8, ppp: 1.15, rank: 1, efg: 0.55 },
+  },
+  shotZones: [
+    { zone: 'Rim', fga: 6.8, fgPct: 0.712, freq: 28.8, leagueAvg: 0.628 },
+    { zone: 'Short Mid', fga: 4.2, fgPct: 0.528, freq: 17.8, leagueAvg: 0.422 },
+    { zone: 'Long Mid', fga: 3.8, fgPct: 0.448, freq: 16.1, leagueAvg: 0.408 },
+    { zone: 'Corner 3', fga: 0.8, fgPct: 0.412, freq: 3.4, leagueAvg: 0.381 },
+    { zone: 'Above Break 3', fga: 3.2, fgPct: 0.378, freq: 13.6, leagueAvg: 0.358 },
+    { zone: 'FT', fga: 4.8, fgPct: 0.818, freq: 20.3, leagueAvg: 0.782 },
+  ],
+  defensive: {
+    overview: { dRapm: -0.8, contestRate: 52.1, dfgPctDiff: 1.2, stlRate: 1.6, blkRate: 0.9, deflections: 1.8, rank: 128 },
+    perimeter: {
+      onBallDfg: 48.2, pullUpDfg: 45.1, catchShootDfg: 42.8,
+      onBallDfgDiff: 4.8, pullUpDfgDiff: 3.5, catchShootDfgDiff: 2.2,
+      tightContestRate: 42.1, screenNavRate: 38.5, avgContestDist: 5.2, dribblePctAllowed: 52.8,
+      scoutingReport: 'Below-average perimeter defender. Slow lateral movement makes him exploitable in space. Compensates with IQ and positioning but switchable matchups are a concern.',
+    },
+    isolation: {
+      isoDfg: 48.5, isoPpp: 1.04, isoRank: 185, possessions: 88,
+      tovForcedPct: 8.2, freqTargeted: 12.4,
+      byZone: [
+        { zone: 'At Rim', dfgPct: 52.1, freq: 35 },
+        { zone: 'Mid-Range', dfgPct: 46.8, freq: 40 },
+        { zone: 'Three', dfgPct: 44.2, freq: 25 },
+      ],
+      scoutingReport: 'Targeted frequently in isolation. Opponents shoot above league average against him at every level.',
+    },
+    rimProtection: { contestsPerGame: 3.2, dfgPctAtRim: 58.4, diffVsLeague: -4.4 },
+    matchupLog: [
+      { opponent: 'Anthony Davis', possessions: 52, dfgPct: 48.2, ptsAllowed: 28 },
+      { opponent: 'Bam Adebayo', possessions: 44, dfgPct: 42.1, ptsAllowed: 18 },
+      { opponent: 'Karl-Anthony Towns', possessions: 38, dfgPct: 52.8, ptsAllowed: 24 },
+    ],
+  },
+  timeline: [
+    { season: '2020-21', per: 26.4, ws48: 0.268, bpm: 9.8, epm: 8.2 },
+    { season: '2021-22', per: 32.8, ws48: 0.298, bpm: 13.7, epm: 10.8 },
+    { season: '2022-23', per: 31.2, ws48: 0.308, bpm: 12.4, epm: 9.8 },
+    { season: '2023-24', per: 30.8, ws48: 0.302, bpm: 12.8, epm: 10.1 },
+    { season: '2024-25', per: 32.8, ws48: 0.312, bpm: 13.1, epm: 10.2 },
+  ],
+  radarData: [
+    { stat: 'Scoring', value: 88 }, { stat: 'Playmaking', value: 99 },
+    { stat: 'Defense', value: 38 }, { stat: 'Efficiency', value: 98 },
+    { stat: 'Volume', value: 85 }, { stat: 'Durability', value: 82 },
+    { stat: 'Clutch', value: 78 }, { stat: 'Versatility', value: 72 },
+  ],
+  portability: {
+    index: 68, grade: 'B-', description: 'Offensive system centerpiece but production is pace-dependent and defensive limitations reduce portability.',
+    subScores: { selfCreation: 72, schemeFlexibility: 62, defensiveSwitchability: 25, lowDependency: 58 },
+    selfCreation: { unassistedPct: 52, assistedPct: 48, selfCreatedPpp: 1.04, gravityIndex: 7.2, analysis: 'Post-up and handoff game create for self and others, but relies on spacing around him.' },
+    schemeCompatibility: [
+      { scheme: 'Motion/Read', fitScore: 98, note: 'Born for motion offense — passing vision is elite' },
+      { scheme: 'PnR Heavy', fitScore: 88, note: 'Elite as PnR hub but not a lob threat' },
+      { scheme: 'Iso-Heavy', fitScore: 55, note: 'Limited isolation scoring — not his game' },
+      { scheme: 'Egalitarian', fitScore: 92, note: 'Thrives sharing the ball and creating for others' },
+      { scheme: 'Post-Up', fitScore: 98, note: 'Best post player in the NBA' },
+    ],
+    teammateDependency: { eliteSpacingTS: 0.682, poorSpacingTS: 0.608, spacingDelta: 7.4, withRimProtectorFg: 0.558, withoutRimProtectorFg: 0.564, dependencyScore: 42 },
+    defensiveSwitchability: { guardablePositions: ['C'], switchScore: 22, perimeterDfgDiff: 4.8, pnrNavigation: 35, scoutingNote: 'Cannot switch onto guards or wings. Must be hidden in PnR defense.' },
+    projectedFits: [
+      { team: 'Golden State Warriors', archetype: 'Motion/Read', projectedNetRtg: 10.2, deltaFromCurrent: 1.0, fitScore: 96, reasoning: 'Motion offense maximizes passing — Curry/Jokic PnR is unfair' },
+      { team: 'Boston Celtics', archetype: 'Egalitarian', projectedNetRtg: 9.8, deltaFromCurrent: 0.6, fitScore: 88, reasoning: 'Spacing is elite but defensive scheme needs rim protector he isn\'t' },
+      { team: 'LA Lakers', archetype: 'Post-Up', projectedNetRtg: 7.4, deltaFromCurrent: -1.8, fitScore: 72, reasoning: 'Spacing concerns with LeBron — both need the ball' },
+      { team: 'Minnesota Timberwolves', archetype: 'PnR Heavy', projectedNetRtg: 8.8, deltaFromCurrent: -0.4, fitScore: 82, reasoning: 'Elite defenders around him mask weaknesses' },
+    ],
+    historicalComps: [
+      { player: 'Larry Bird (1986)', similarity: 72, portabilityScore: 74, analysis: 'Similar passing big archetype — needed specific roster construction around limitations' },
+      { player: 'Arvydas Sabonis (1996)', similarity: 68, portabilityScore: 62, analysis: 'Pass-first center who elevated teammates but was scheme-dependent' },
+    ],
+  },
+  championship: {
+    index: 82, tier: 'CHAMPIONSHIP ALPHA',
+    verdict: 'Proven champion with historic offensive impact. Defensive limitations are the primary concern in playoff series against elite wing scorers. Needs strong defensive supporting cast to repeat.',
+    winProbability: 14.2, historicalBaseRate: 3.3, multiplier: 4.3,
+    pillars: [
+      { name: 'Playoff Scoring Projection', score: 88, weight: 25, explanation: 'Post game and playmaking scale well — proven in 2023 title run' },
+      { name: 'Two-Way Impact', score: 68, weight: 20, explanation: 'Historic offense but defense is a liability in playoff matchups' },
+      { name: 'Clutch & Pressure', score: 82, weight: 15, explanation: 'Championship poise proven — Game 5 vs Heat was all-time' },
+      { name: 'Portability / Roster Flexibility', score: 65, weight: 15, explanation: 'Needs specific roster construction — spacing + rim protection' },
+      { name: 'Durability & Availability', score: 78, weight: 10, explanation: 'Generally healthy but conditioning questions linger' },
+      { name: 'Playoff Experience & Growth Arc', score: 95, weight: 10, explanation: 'Champion with multiple deep runs — battle-tested' },
+      { name: 'Supporting Cast Threshold', score: 72, weight: 5, explanation: 'Murray health is a concern, MPJ inconsistent' },
+    ],
+    playoffProjection: {
+      ppg: 28.2, ts: 0.628, ast: 10.4, drtg: 114,
+      regToPlayoffDrop: { ppg: 1.8, ts: -0.034, ast: 0.6, drtg: 2.0 },
+      comparisonNote: 'Actually improves in playoffs — rare for a center. 2023 Finals: 30/14/10 on 58% shooting.',
+    },
+    supportingCast: {
+      min2ndOption: 'All-Star guard (Jamal Murray)', spacingNeed: 'Critical — needs 4 shooters around him',
+      defensiveNeed: 'Elite wing defender + rim protector to cover him', capFlexibility: 'Moderate — Murray/MPJ contracts limit flexibility',
+      blueprint: 'Elite perimeter defenders at every position + spacing. Denver\'s 2023 model: Murray-KCP-Gordon-MPJ around Jokic.',
+    },
+    comparables: [
+      { player: 'Nikola Jokic', year: '2023', role: '#1 Option', castStrength: 82, championshipIndex: 88, won: true, analysis: 'Won title with elite supporting cast that masked defensive weaknesses' },
+      { player: 'Dirk Nowitzki', year: '2011', role: '#1 Option', castStrength: 68, championshipIndex: 78, won: true, analysis: 'Similar offensive big who needed defensive cast — carried Dallas to upset title' },
+      { player: 'Hakeem Olajuwon', year: '1994', role: '#1 Option', castStrength: 55, championshipIndex: 92, won: true, analysis: 'Different player but similar center-led title run — Hakeem was elite defensively though' },
+      { player: 'Karl Malone', year: '1997', role: '#1 Option', castStrength: 72, championshipIndex: 76, won: false, analysis: 'Elite offensive big who couldn\'t overcome defensive limitations against Jordan' },
+    ],
+  },
+  opponentTier: [
+    { tier: 'Elite Starters', netRtg: 5.8, minutes: 398, weight: 1.0 },
+    { tier: 'Quality Starters', netRtg: 10.2, minutes: 652, weight: 0.8 },
+    { tier: 'Role Players', netRtg: 16.8, minutes: 498, weight: 0.6 },
+    { tier: 'Bench/Deep', netRtg: 22.4, minutes: 282, weight: 0.4 },
+  ],
+  lineupContext: {
+    topLineups: [
+      { players: ['Murray', 'KCP', 'MPJ', 'Gordon', 'Jokic'], minutes: 512, rawNet: 16.2, ctxNet: 10.4, oppTier: 'Mixed' },
+      { players: ['Murray', 'Braun', 'MPJ', 'Gordon', 'Jokic'], minutes: 228, rawNet: 12.8, ctxNet: 8.2, oppTier: 'Quality' },
+      { players: ['Watson', 'Braun', 'MPJ', 'Gordon', 'Jokic'], minutes: 165, rawNet: 8.4, ctxNet: 5.8, oppTier: 'Mixed' },
+    ],
+    withoutTopTeammate: { teammate: 'Jamal Murray', netRtg: 4.2, minutes: 408 },
+  },
+}
