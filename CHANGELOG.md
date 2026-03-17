@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-03-17
+- **added additional stat API endpoints** (`31392f5`)
+  - `GET /stats/advanced` — all players advanced stats
+  - `GET /stats/advanced/{player_id}` — player advanced stats
+  - `GET /stats/shot-zones/{player_id}` — shot zone breakdown
+  - `GET /stats/defense/leaderboard` — defensive leaderboard
+  - `GET /stats/defense/{player_id}` — player defensive profile
+  - `GET /stats/computed` — all players computed stats (PER, BPM, Win Shares, etc.)
+  - `GET /stats/computed/{player_id}` — player computed stats
+  - `GET /stats/career/{player_id}` — player career stats
+  - `GET /stats/shooting` — all players shooting tracking
+  - `GET /stats/shooting/{player_id}` — player shooting tracking
+- **fix: add missing frontend data files blocked by overly broad gitignore** (`d16cbbb`)
+
 ## 2026-03-14
 - **added player card page with mock data** (`fc902b4`)
 
