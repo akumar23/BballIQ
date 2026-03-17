@@ -15,10 +15,17 @@ from nba_api.stats.endpoints import (
     CommonAllPlayers,
     LeagueDashPlayerStats,
 )
+from nba_api.stats.endpoints.leaguedashteamstats import LeagueDashTeamStats
+from nba_api.stats.endpoints.playercareerstats import PlayerCareerStats
 from nba_api.stats.endpoints.leaguedashlineups import LeagueDashLineups
+from nba_api.stats.endpoints.leaguedashplayerclutch import LeagueDashPlayerClutch
+from nba_api.stats.endpoints.leaguedashplayershotlocations import (
+    LeagueDashPlayerShotLocations,
+)
 from nba_api.stats.endpoints.leaguedashptdefend import LeagueDashPtDefend
 from nba_api.stats.endpoints.leaguedashptstats import LeagueDashPtStats
 from nba_api.stats.endpoints.leaguehustlestatsplayer import LeagueHustleStatsPlayer
+from nba_api.stats.endpoints.shotchartleaguewide import ShotChartLeagueWide
 from nba_api.stats.endpoints.synergyplaytypes import SynergyPlayTypes
 from nba_api.stats.endpoints.teamplayeronoffsummary import TeamPlayerOnOffSummary
 from nba_api.stats.static import teams as nba_teams
@@ -137,6 +144,46 @@ PLAY_TYPE_MAPPING = {
     "cut": "Cut",
     "off_screen": "OffScreen",
 }
+
+# Key defensive play types for defensive synergy data
+DEFENSIVE_PLAY_TYPE_MAPPING = {
+    "isolation": "Isolation",
+    "pnr_ball_handler": "PRBallHandler",
+    "post_up": "Postup",
+    "spot_up": "Spotup",
+    "transition": "Transition",
+}
+
+
+@dataclass
+class DefensivePlayTypeMetrics:
+    """Metrics for a single defensive play type."""
+
+    possessions: int
+    points: int
+    fgm: int
+    fga: int
+    ppp: Decimal  # Points per possession
+    fg_pct: Decimal
+    percentile: Decimal
+
+
+@dataclass
+class PlayerDefensivePlayTypeData:
+    """Defensive play type data for a single player."""
+
+    player_id: int
+    player_name: str
+    team_abbreviation: str
+
+    isolation: DefensivePlayTypeMetrics | None = None
+    pnr_ball_handler: DefensivePlayTypeMetrics | None = None
+    post_up: DefensivePlayTypeMetrics | None = None
+    spot_up: DefensivePlayTypeMetrics | None = None
+    transition: DefensivePlayTypeMetrics | None = None
+
+    # Total possessions across all defensive play types
+    total_poss: int = 0
 
 
 @dataclass
@@ -1066,6 +1113,686 @@ class NBADataService:
 
         logger.info("Combined play type data for %d players", len(combined))
         print(f"  - Combined play type data for {len(combined)} players")
+        return combined
+
+    def get_advanced_stats(self, season: str = "2024-25") -> list[dict]:
+        """Get advanced stats for all players.
+
+        Returns: TS%, USG%, ORtg, DRtg, PACE, PIE, EFG%, AST%, AST_TO,
+                 AST_RATIO, OREB%, DREB%, REB%, TM_TOV%
+
+        Args:
+            season: NBA season string (e.g., "2024-25")
+
+        Returns:
+            List of player advanced stat dictionaries
+
+        Raises:
+            CircuitBreakerError: If circuit breaker is open
+            RateLimitError: If rate limited after max retries
+        """
+        cache_key = self._get_cache_key(CacheKeyPrefix.NBA_ADVANCED_STATS, season)
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info("Cache hit for advanced stats (season: %s)", season)
+                return cached
+
+        logger.info(
+            "Cache miss for advanced stats (season: %s), fetching from API", season
+        )
+        stats = self._request_with_retry(
+            LeagueDashPlayerStats,
+            season=season,
+            per_mode_detailed="PerGame",
+            measure_type_detailed_defense="Advanced",
+        )
+        result = stats.get_normalized_dict()["LeagueDashPlayerStats"]
+
+        # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_shot_location_stats(self, season: str = "2024-25") -> list[dict]:
+        """Get shot location stats (by zone) for all players.
+
+        Returns per-zone FGM, FGA, FG_PCT for: Restricted Area, In The Paint
+        (Non-RA), Mid-Range, Left Corner 3, Right Corner 3, Above the Break 3,
+        Backcourt.
+
+        Args:
+            season: NBA season string (e.g., "2024-25")
+
+        Returns:
+            List of player shot location stat dictionaries
+
+        Raises:
+            CircuitBreakerError: If circuit breaker is open
+            RateLimitError: If rate limited after max retries
+        """
+        cache_key = self._get_cache_key(CacheKeyPrefix.NBA_SHOT_LOCATIONS, season)
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info("Cache hit for shot location stats (season: %s)", season)
+                return cached
+
+        logger.info(
+            "Cache miss for shot location stats (season: %s), fetching from API",
+            season,
+        )
+        shots = self._request_with_retry(
+            LeagueDashPlayerShotLocations,
+            season=season,
+            distance_range="By Zone",
+            per_mode_detailed="PerGame",
+        )
+        result = shots.get_normalized_dict().get("ShotLocations", [])
+
+        # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_league_shot_averages(self, season: str = "2024-25") -> list[dict]:
+        """Get league-wide average FG% by shot zone.
+
+        Args:
+            season: NBA season string (e.g., "2024-25")
+
+        Returns:
+            List of league shot average dictionaries by zone
+
+        Raises:
+            CircuitBreakerError: If circuit breaker is open
+            RateLimitError: If rate limited after max retries
+        """
+        cache_key = self._get_cache_key(
+            CacheKeyPrefix.NBA_LEAGUE_SHOT_AVERAGES, season
+        )
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info(
+                    "Cache hit for league shot averages (season: %s)", season
+                )
+                return cached
+
+        logger.info(
+            "Cache miss for league shot averages (season: %s), fetching from API",
+            season,
+        )
+        averages = self._request_with_retry(
+            ShotChartLeagueWide,
+            season=season,
+        )
+        result = averages.get_normalized_dict().get("LeagueWide", [])
+
+        # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_clutch_stats(self, season: str = "2024-25") -> list[dict]:
+        """Get clutch time stats for all players.
+
+        Clutch is defined as the last 5 minutes of a game when the score
+        differential is 5 points or fewer.
+
+        Args:
+            season: NBA season string (e.g., "2024-25")
+
+        Returns:
+            List of player clutch stat dictionaries
+
+        Raises:
+            CircuitBreakerError: If circuit breaker is open
+            RateLimitError: If rate limited after max retries
+        """
+        cache_key = self._get_cache_key(CacheKeyPrefix.NBA_CLUTCH_STATS, season)
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info("Cache hit for clutch stats (season: %s)", season)
+                return cached
+
+        logger.info(
+            "Cache miss for clutch stats (season: %s), fetching from API", season
+        )
+        clutch = self._request_with_retry(
+            LeagueDashPlayerClutch,
+            season=season,
+            clutch_time_nullable="Last 5 Minutes",
+            ahead_behind_nullable="Ahead or Behind",
+            point_diff_nullable=5,
+            per_mode_detailed="PerGame",
+            measure_type_detailed_defense="Base",
+        )
+        result = clutch.get_normalized_dict().get("LeagueDashPlayerClutch", [])
+
+        # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_defensive_play_type_stats(
+        self,
+        play_type: str,
+        season: str = "2024-25",
+        season_type: str = "Regular Season",
+    ) -> list[dict]:
+        """Get defensive synergy play type stats for all players.
+
+        Args:
+            play_type: Play type name (e.g., "Isolation", "PRBallHandler")
+            season: NBA season string (e.g., "2024-25")
+            season_type: "Regular Season" or "Playoffs"
+
+        Returns:
+            List of player defensive play type stat dictionaries
+
+        Raises:
+            CircuitBreakerError: If circuit breaker is open
+            RateLimitError: If rate limited after max retries
+        """
+        cache_key = (
+            f"{CacheKeyPrefix.NBA_DEFENSIVE_PLAY_TYPE_STATS.value}:{play_type}:{season}"
+        )
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info(
+                    "Cache hit for defensive play type stats (type: %s, season: %s)",
+                    play_type,
+                    season,
+                )
+                return cached
+
+        logger.info(
+            "Cache miss for defensive play type stats (type: %s, season: %s), "
+            "fetching from API",
+            play_type,
+            season,
+        )
+
+        synergy = self._request_with_retry(
+            SynergyPlayTypes,
+            season=season,
+            season_type_all_star=season_type,
+            play_type_nullable=play_type,
+            player_or_team_abbreviation="P",  # Player stats
+            type_grouping_nullable="defensive",  # Defensive play types
+        )
+        result = synergy.get_normalized_dict().get("SynergyPlayType", [])
+
+        # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_rim_protection_stats(self, season: str = "2024-25") -> list[dict]:
+        """Get rim protection stats for all players.
+
+        Returns defensive stats for shots taken within 6 feet of the basket.
+
+        Args:
+            season: NBA season string (e.g., "2024-25")
+
+        Returns:
+            List of player rim protection stat dictionaries
+
+        Raises:
+            CircuitBreakerError: If circuit breaker is open
+            RateLimitError: If rate limited after max retries
+        """
+        cache_key = self._get_cache_key(CacheKeyPrefix.NBA_RIM_PROTECTION, season)
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info("Cache hit for rim protection stats (season: %s)", season)
+                return cached
+
+        logger.info(
+            "Cache miss for rim protection stats (season: %s), fetching from API",
+            season,
+        )
+        rim = self._request_with_retry(
+            LeagueDashPtDefend,
+            season=season,
+            per_mode_simple="Totals",
+            defense_category="Less Than 6Ft",
+        )
+        result = rim.get_normalized_dict()["LeagueDashPTDefend"]
+
+        # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_three_point_defense_stats(self, season: str = "2024-25") -> list[dict]:
+        """Get 3-point defense stats for all players.
+
+        Returns defensive stats for 3-point shots contested by each player.
+
+        Args:
+            season: NBA season string (e.g., "2024-25")
+
+        Returns:
+            List of player 3-point defense stat dictionaries
+
+        Raises:
+            CircuitBreakerError: If circuit breaker is open
+            RateLimitError: If rate limited after max retries
+        """
+        cache_key = self._get_cache_key(CacheKeyPrefix.NBA_DEFENSE_3PT, season)
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info(
+                    "Cache hit for 3PT defense stats (season: %s)", season
+                )
+                return cached
+
+        logger.info(
+            "Cache miss for 3PT defense stats (season: %s), fetching from API",
+            season,
+        )
+        three_pt = self._request_with_retry(
+            LeagueDashPtDefend,
+            season=season,
+            per_mode_simple="Totals",
+            defense_category="3 Pointers",
+        )
+        result = three_pt.get_normalized_dict()["LeagueDashPTDefend"]
+
+        # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_team_stats(
+        self, season: str = "2024-25", measure_type: str = "Base"
+    ) -> list[dict]:
+        """Get team-level stats for all teams.
+
+        Args:
+            season: NBA season string (e.g., "2024-25")
+            measure_type: Stat category - "Base" for traditional totals,
+                          "Advanced" for pace/ratings
+
+        Returns:
+            List of team stat dictionaries
+
+        Raises:
+            CircuitBreakerError: If circuit breaker is open
+            RateLimitError: If rate limited after max retries
+        """
+        cache_key = f"{CacheKeyPrefix.NBA_TEAM_STATS.value}:{measure_type}:{season}"
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info(
+                    "Cache hit for team stats (measure: %s, season: %s)",
+                    measure_type,
+                    season,
+                )
+                return cached
+
+        logger.info(
+            "Cache miss for team stats (measure: %s, season: %s), fetching from API",
+            measure_type,
+            season,
+        )
+        stats = self._request_with_retry(
+            LeagueDashTeamStats,
+            season=season,
+            per_mode_detailed="Totals",
+            measure_type_detailed_defense=measure_type,
+        )
+        result = stats.get_normalized_dict()["LeagueDashTeamStats"]
+
+        # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_per100_stats(self, season: str = "2024-25") -> list[dict]:
+        """Get per-100 possessions stats for all players.
+
+        Args:
+            season: NBA season string (e.g., "2024-25")
+
+        Returns:
+            List of player per-100 possession stat dictionaries
+
+        Raises:
+            CircuitBreakerError: If circuit breaker is open
+            RateLimitError: If rate limited after max retries
+        """
+        cache_key = self._get_cache_key(CacheKeyPrefix.NBA_PER100_STATS, season)
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info("Cache hit for per-100 stats (season: %s)", season)
+                return cached
+
+        logger.info(
+            "Cache miss for per-100 stats (season: %s), fetching from API", season
+        )
+        stats = self._request_with_retry(
+            LeagueDashPlayerStats,
+            season=season,
+            per_mode_detailed="Per100Possessions",
+            measure_type_detailed_defense="Base",
+        )
+        result = stats.get_normalized_dict()["LeagueDashPlayerStats"]
+
+        # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_career_stats(self, player_id: int) -> dict:
+        """Get career stats for a single player.
+
+        Returns multiple datasets including SeasonTotalsRegularSeason
+        and CareerTotalsRegularSeason.
+
+        Args:
+            player_id: NBA player ID
+
+        Returns:
+            Dictionary with dataset names as keys and list of row dicts as values
+
+        Raises:
+            CircuitBreakerError: If circuit breaker is open
+            RateLimitError: If rate limited after max retries
+        """
+        cache_key = f"{CacheKeyPrefix.NBA_CAREER_STATS.value}:{player_id}"
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info("Cache hit for career stats (player: %d)", player_id)
+                return cached
+
+        logger.info(
+            "Cache miss for career stats (player: %d), fetching from API", player_id
+        )
+        career = self._request_with_retry(
+            PlayerCareerStats,
+            player_id=player_id,
+            per_mode36="PerGame",
+        )
+        result = career.get_normalized_dict()
+
+        # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_catch_shoot_stats(self, season: str = "2024-25") -> list[dict]:
+        """Get catch-and-shoot tracking stats for all players.
+
+        Args:
+            season: NBA season string (e.g., "2024-25")
+
+        Returns:
+            List of player catch-and-shoot stat dictionaries
+
+        Raises:
+            CircuitBreakerError: If circuit breaker is open
+            RateLimitError: If rate limited after max retries
+        """
+        cache_key = self._get_cache_key(CacheKeyPrefix.NBA_CATCH_SHOOT_STATS, season)
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info("Cache hit for catch-shoot stats (season: %s)", season)
+                return cached
+
+        logger.info(
+            "Cache miss for catch-shoot stats (season: %s), fetching from API", season
+        )
+        stats = self._request_with_retry(
+            LeagueDashPtStats,
+            season=season,
+            per_mode_simple="PerGame",
+            player_or_team="Player",
+            pt_measure_type="CatchShoot",
+        )
+        result = stats.get_normalized_dict()["LeagueDashPtStats"]
+
+        # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_pullup_stats(self, season: str = "2024-25") -> list[dict]:
+        """Get pull-up shooting tracking stats for all players.
+
+        Args:
+            season: NBA season string (e.g., "2024-25")
+
+        Returns:
+            List of player pull-up shooting stat dictionaries
+
+        Raises:
+            CircuitBreakerError: If circuit breaker is open
+            RateLimitError: If rate limited after max retries
+        """
+        cache_key = self._get_cache_key(CacheKeyPrefix.NBA_PULLUP_STATS, season)
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info("Cache hit for pull-up stats (season: %s)", season)
+                return cached
+
+        logger.info(
+            "Cache miss for pull-up stats (season: %s), fetching from API", season
+        )
+        stats = self._request_with_retry(
+            LeagueDashPtStats,
+            season=season,
+            per_mode_simple="PerGame",
+            player_or_team="Player",
+            pt_measure_type="PullUpShot",
+        )
+        result = stats.get_normalized_dict()["LeagueDashPtStats"]
+
+        # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_drive_stats(self, season: str = "2024-25") -> list[dict]:
+        """Get drive tracking stats for all players.
+
+        Args:
+            season: NBA season string (e.g., "2024-25")
+
+        Returns:
+            List of player drive stat dictionaries
+
+        Raises:
+            CircuitBreakerError: If circuit breaker is open
+            RateLimitError: If rate limited after max retries
+        """
+        cache_key = self._get_cache_key(CacheKeyPrefix.NBA_DRIVE_STATS, season)
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info("Cache hit for drive stats (season: %s)", season)
+                return cached
+
+        logger.info(
+            "Cache miss for drive stats (season: %s), fetching from API", season
+        )
+        stats = self._request_with_retry(
+            LeagueDashPtStats,
+            season=season,
+            per_mode_simple="PerGame",
+            player_or_team="Player",
+            pt_measure_type="Drives",
+        )
+        result = stats.get_normalized_dict()["LeagueDashPtStats"]
+
+        # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_efficiency_tracking_stats(self, season: str = "2024-25") -> list[dict]:
+        """Get efficiency tracking stats (assisted/unassisted FG breakdown).
+
+        Args:
+            season: NBA season string (e.g., "2024-25")
+
+        Returns:
+            List of player efficiency tracking stat dictionaries
+
+        Raises:
+            CircuitBreakerError: If circuit breaker is open
+            RateLimitError: If rate limited after max retries
+        """
+        cache_key = self._get_cache_key(CacheKeyPrefix.NBA_EFFICIENCY_STATS, season)
+
+        # Check cache first (unless bypassed)
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info(
+                    "Cache hit for efficiency tracking stats (season: %s)", season
+                )
+                return cached
+
+        logger.info(
+            "Cache miss for efficiency tracking stats (season: %s), fetching from API",
+            season,
+        )
+        efficiency = self._request_with_retry(
+            LeagueDashPtStats,
+            season=season,
+            per_mode_simple="PerGame",
+            player_or_team="Player",
+            pt_measure_type="Efficiency",
+        )
+        result = efficiency.get_normalized_dict()["LeagueDashPtStats"]
+
+        # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def fetch_all_defensive_play_type_data(
+        self,
+        season: str = "2024-25",
+        progress_callback: Optional[callable] = None,
+    ) -> dict[int, PlayerDefensivePlayTypeData]:
+        """Fetch and combine defensive play type data for all players.
+
+        This method fetches defensive synergy play type stats for key defensive
+        play types (Isolation, PRBallHandler, Postup, Spotup, Transition) and
+        combines them into PlayerDefensivePlayTypeData objects.
+
+        Args:
+            season: NBA season string (e.g., "2024-25")
+            progress_callback: Optional callback(play_type_idx, total, play_type_name)
+
+        Returns:
+            Dict keyed by player_id with aggregated PlayerDefensivePlayTypeData
+
+        Raises:
+            CircuitBreakerError: If circuit breaker is open
+            RateLimitError: If rate limited after max retries
+        """
+        logger.info("Fetching defensive play type data for season %s...", season)
+        print(f"Fetching defensive play type data for season {season}...")
+
+        combined: dict[int, PlayerDefensivePlayTypeData] = {}
+        play_types = list(DEFENSIVE_PLAY_TYPE_MAPPING.items())
+
+        for idx, (field_name, api_name) in enumerate(play_types):
+            if progress_callback:
+                progress_callback(idx + 1, len(play_types), api_name)
+
+            logger.info(
+                "Fetching defensive %s stats (%d/%d)...",
+                api_name,
+                idx + 1,
+                len(play_types),
+            )
+            print(
+                f"  - Fetching defensive {api_name} stats "
+                f"({idx + 1}/{len(play_types)})..."
+            )
+
+            try:
+                play_type_data = self.get_defensive_play_type_stats(api_name, season)
+
+                for player in play_type_data:
+                    player_id = player.get("PLAYER_ID")
+                    if not player_id:
+                        continue
+
+                    # Create or get existing player data
+                    if player_id not in combined:
+                        combined[player_id] = PlayerDefensivePlayTypeData(
+                            player_id=player_id,
+                            player_name=player.get("PLAYER_NAME", ""),
+                            team_abbreviation=player.get("TEAM_ABBREVIATION", ""),
+                        )
+
+                    # Create metrics for this defensive play type
+                    poss = player.get("POSS", 0) or 0
+                    pts = player.get("PTS", 0) or 0
+                    fgm = player.get("FGM", 0) or 0
+                    fga = player.get("FGA", 0) or 0
+                    ppp = Decimal(str(player.get("PPP", 0) or 0))
+                    fg_pct = Decimal(str(player.get("FG_PCT", 0) or 0))
+                    percentile = Decimal(str(player.get("PERCENTILE", 0) or 0))
+
+                    metrics = DefensivePlayTypeMetrics(
+                        possessions=poss,
+                        points=pts,
+                        fgm=fgm,
+                        fga=fga,
+                        ppp=ppp,
+                        fg_pct=fg_pct,
+                        percentile=percentile,
+                    )
+
+                    # Set the metrics on the player data
+                    setattr(combined[player_id], field_name, metrics)
+
+                    # Update total possessions
+                    combined[player_id].total_poss += poss
+
+            except Exception as e:
+                logger.warning("Failed to fetch defensive %s stats: %s", api_name, e)
+                print(
+                    f"    Warning: Failed to fetch defensive {api_name} stats: {e}"
+                )
+                continue
+
+        logger.info(
+            "Combined defensive play type data for %d players", len(combined)
+        )
+        print(
+            f"  - Combined defensive play type data for {len(combined)} players"
+        )
         return combined
 
 

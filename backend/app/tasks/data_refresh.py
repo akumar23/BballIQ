@@ -596,11 +596,404 @@ def refresh_play_type_data(self, season: str | None = None) -> dict:
         db.close()
 
 
+@celery_app.task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    retry_kwargs={"max_retries": 3},
+    acks_late=True,
+)
+def refresh_advanced_data(self, season: str | None = None) -> dict:
+    """Fetch advanced stats, shot zones, clutch, and defensive data.
+
+    Args:
+        season: NBA season string. Defaults to current season.
+
+    Returns:
+        dict with status and player count
+    """
+    from decimal import Decimal
+
+    from app.models import Player
+    from app.models.advanced_stats import PlayerAdvancedStats
+    from app.models.clutch_stats import PlayerClutchStats as PlayerClutchStatsModel
+    from app.models.defensive_matchups import PlayerDefensiveStats as PlayerDefensiveStatsModel
+    from app.models.shot_zones import PlayerShotZones as PlayerShotZonesModel
+    from app.services.nba_data import NBADataService
+    from app.services.rate_limiter import CircuitBreakerError, RateLimitError
+
+    season = season or get_current_season()
+    logger.info("Starting advanced data refresh for season %s", season)
+
+    def safe_decimal(value, default=None):
+        if value is None:
+            return default
+        try:
+            return Decimal(str(value))
+        except Exception:
+            return default
+
+    def safe_int(value, default=None):
+        if value is None:
+            return default
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return default
+
+    db = SessionLocal()
+    try:
+        service = NBADataService(bypass_cache=True)
+
+        # Fetch advanced stats
+        try:
+            advanced_data = service.get_advanced_stats(season)
+            advanced_by_player = {p["PLAYER_ID"]: p for p in advanced_data}
+        except (CircuitBreakerError, RateLimitError) as e:
+            logger.error("Failed to fetch advanced stats: %s", e)
+            raise self.retry(exc=e)
+
+        # Fetch clutch stats
+        try:
+            clutch_data = service.get_clutch_stats(season)
+            clutch_by_player = {p["PLAYER_ID"]: p for p in clutch_data}
+        except (CircuitBreakerError, RateLimitError) as e:
+            logger.error("Failed to fetch clutch stats: %s", e)
+            clutch_by_player = {}
+
+        # Fetch defensive stats
+        try:
+            overall_defense = service.get_defensive_stats(season)
+            overall_def_by_player = {p["CLOSE_DEF_PERSON_ID"]: p for p in overall_defense}
+        except (CircuitBreakerError, RateLimitError) as e:
+            logger.error("Failed to fetch overall defensive stats: %s", e)
+            overall_def_by_player = {}
+
+        try:
+            rim_defense = service.get_rim_protection_stats(season)
+            rim_def_by_player = {p["CLOSE_DEF_PERSON_ID"]: p for p in rim_defense}
+        except (CircuitBreakerError, RateLimitError) as e:
+            logger.error("Failed to fetch rim protection stats: %s", e)
+            rim_def_by_player = {}
+
+        try:
+            three_pt_defense = service.get_three_point_defense_stats(season)
+            three_pt_def_by_player = {p["CLOSE_DEF_PERSON_ID"]: p for p in three_pt_defense}
+        except (CircuitBreakerError, RateLimitError) as e:
+            logger.error("Failed to fetch 3PT defensive stats: %s", e)
+            three_pt_def_by_player = {}
+
+        try:
+            iso_defense = service.get_defensive_play_type_stats("Isolation", season)
+            iso_def_by_player = {p["PLAYER_ID"]: p for p in iso_defense}
+        except (CircuitBreakerError, RateLimitError) as e:
+            logger.error("Failed to fetch isolation defense stats: %s", e)
+            iso_def_by_player = {}
+
+        # Fetch shot zone data
+        try:
+            shot_data = service.get_shot_location_stats(season)
+        except (CircuitBreakerError, RateLimitError) as e:
+            logger.error("Failed to fetch shot location stats: %s", e)
+            shot_data = []
+
+        try:
+            league_averages = service.get_league_shot_averages(season)
+        except (CircuitBreakerError, RateLimitError) as e:
+            logger.error("Failed to fetch league shot averages: %s", e)
+            league_averages = {}
+
+        # Collect all player IDs
+        all_player_ids = set()
+        all_player_ids.update(advanced_by_player.keys())
+        all_player_ids.update(clutch_by_player.keys())
+        all_player_ids.update(overall_def_by_player.keys())
+        all_player_ids.update(rim_def_by_player.keys())
+        all_player_ids.update(three_pt_def_by_player.keys())
+        all_player_ids.update(iso_def_by_player.keys())
+
+        processed = 0
+        errors = 0
+
+        for player_id in all_player_ids:
+            try:
+                player = db.query(Player).filter(Player.nba_id == player_id).first()
+                if not player:
+                    continue
+
+                # Upsert advanced stats
+                adv = advanced_by_player.get(player_id)
+                if adv:
+                    adv_stats = (
+                        db.query(PlayerAdvancedStats)
+                        .filter(PlayerAdvancedStats.player_id == player.id, PlayerAdvancedStats.season == season)
+                        .first()
+                    )
+                    if not adv_stats:
+                        adv_stats = PlayerAdvancedStats(player_id=player.id, season=season)
+                        db.add(adv_stats)
+
+                    adv_stats.ts_pct = safe_decimal(adv.get("TS_PCT"))
+                    adv_stats.efg_pct = safe_decimal(adv.get("EFG_PCT"))
+                    adv_stats.usg_pct = safe_decimal(adv.get("USG_PCT"))
+                    adv_stats.off_rating = safe_decimal(adv.get("OFF_RATING"))
+                    adv_stats.def_rating = safe_decimal(adv.get("DEF_RATING"))
+                    adv_stats.net_rating = safe_decimal(adv.get("NET_RATING"))
+                    adv_stats.pace = safe_decimal(adv.get("PACE"))
+                    adv_stats.pie = safe_decimal(adv.get("PIE"))
+                    adv_stats.ast_pct = safe_decimal(adv.get("AST_PCT"))
+                    adv_stats.ast_to = safe_decimal(adv.get("AST_TO"))
+                    adv_stats.ast_ratio = safe_decimal(adv.get("AST_RATIO"))
+                    adv_stats.oreb_pct = safe_decimal(adv.get("OREB_PCT"))
+                    adv_stats.dreb_pct = safe_decimal(adv.get("DREB_PCT"))
+                    adv_stats.reb_pct = safe_decimal(adv.get("REB_PCT"))
+                    adv_stats.tm_tov_pct = safe_decimal(adv.get("TM_TOV_PCT"))
+
+                # Upsert clutch stats
+                clutch = clutch_by_player.get(player_id)
+                if clutch:
+                    clutch_stats = (
+                        db.query(PlayerClutchStatsModel)
+                        .filter(PlayerClutchStatsModel.player_id == player.id, PlayerClutchStatsModel.season == season)
+                        .first()
+                    )
+                    if not clutch_stats:
+                        clutch_stats = PlayerClutchStatsModel(player_id=player.id, season=season)
+                        db.add(clutch_stats)
+
+                    clutch_stats.games_played = safe_int(clutch.get("GP"))
+                    clutch_stats.minutes = safe_decimal(clutch.get("MIN"))
+                    clutch_stats.pts = safe_decimal(clutch.get("PTS"))
+                    clutch_stats.fgm = safe_decimal(clutch.get("FGM"))
+                    clutch_stats.fga = safe_decimal(clutch.get("FGA"))
+                    clutch_stats.fg_pct = safe_decimal(clutch.get("FG_PCT"))
+                    clutch_stats.fg3m = safe_decimal(clutch.get("FG3M"))
+                    clutch_stats.fg3a = safe_decimal(clutch.get("FG3A"))
+                    clutch_stats.fg3_pct = safe_decimal(clutch.get("FG3_PCT"))
+                    clutch_stats.ftm = safe_decimal(clutch.get("FTM"))
+                    clutch_stats.fta = safe_decimal(clutch.get("FTA"))
+                    clutch_stats.ft_pct = safe_decimal(clutch.get("FT_PCT"))
+                    clutch_stats.ast = safe_decimal(clutch.get("AST"))
+                    clutch_stats.reb = safe_decimal(clutch.get("REB"))
+                    clutch_stats.stl = safe_decimal(clutch.get("STL"))
+                    clutch_stats.blk = safe_decimal(clutch.get("BLK"))
+                    clutch_stats.tov = safe_decimal(clutch.get("TOV"))
+                    clutch_stats.plus_minus = safe_decimal(clutch.get("PLUS_MINUS"))
+                    clutch_stats.net_rating = safe_decimal(clutch.get("NET_RATING"))
+
+                # Upsert defensive stats
+                overall = overall_def_by_player.get(player_id)
+                rim = rim_def_by_player.get(player_id)
+                three_pt = three_pt_def_by_player.get(player_id)
+                iso = iso_def_by_player.get(player_id)
+
+                if overall or rim or three_pt or iso:
+                    def_stats = (
+                        db.query(PlayerDefensiveStatsModel)
+                        .filter(PlayerDefensiveStatsModel.player_id == player.id, PlayerDefensiveStatsModel.season == season)
+                        .first()
+                    )
+                    if not def_stats:
+                        def_stats = PlayerDefensiveStatsModel(player_id=player.id, season=season)
+                        db.add(def_stats)
+
+                    if overall:
+                        def_stats.overall_d_fgm = safe_decimal(overall.get("D_FGM"))
+                        def_stats.overall_d_fga = safe_decimal(overall.get("D_FGA"))
+                        def_stats.overall_d_fg_pct = safe_decimal(overall.get("D_FG_PCT"))
+                        def_stats.overall_normal_fg_pct = safe_decimal(overall.get("NORMAL_FG_PCT"))
+                        def_stats.overall_pct_plusminus = safe_decimal(overall.get("PCT_PLUSMINUS"))
+
+                    if rim:
+                        def_stats.rim_d_fgm = safe_decimal(rim.get("D_FGM"))
+                        def_stats.rim_d_fga = safe_decimal(rim.get("D_FGA"))
+                        def_stats.rim_d_fg_pct = safe_decimal(rim.get("D_FG_PCT"))
+                        def_stats.rim_normal_fg_pct = safe_decimal(rim.get("NORMAL_FG_PCT"))
+                        def_stats.rim_pct_plusminus = safe_decimal(rim.get("PCT_PLUSMINUS"))
+
+                    if three_pt:
+                        def_stats.three_pt_d_fgm = safe_decimal(three_pt.get("D_FGM"))
+                        def_stats.three_pt_d_fga = safe_decimal(three_pt.get("D_FGA"))
+                        def_stats.three_pt_d_fg_pct = safe_decimal(three_pt.get("D_FG_PCT"))
+                        def_stats.three_pt_normal_fg_pct = safe_decimal(three_pt.get("NORMAL_FG_PCT"))
+                        def_stats.three_pt_pct_plusminus = safe_decimal(three_pt.get("PCT_PLUSMINUS"))
+
+                    if iso:
+                        def_stats.iso_poss = safe_int(iso.get("POSS"))
+                        def_stats.iso_pts = safe_int(iso.get("PTS"))
+                        def_stats.iso_fgm = safe_int(iso.get("FGM"))
+                        def_stats.iso_fga = safe_int(iso.get("FGA"))
+                        def_stats.iso_ppp = safe_decimal(iso.get("PPP"))
+                        def_stats.iso_fg_pct = safe_decimal(iso.get("FG_PCT"))
+                        def_stats.iso_percentile = safe_decimal(iso.get("PERCENTILE"))
+
+                processed += 1
+
+            except Exception as e:
+                logger.error("Error processing player %d: %s", player_id, e)
+                errors += 1
+
+        # Store shot zone data
+        league_avg_lookup = {}
+        if isinstance(league_averages, list):
+            for zone_data in league_averages:
+                zone_name = zone_data.get("ZONE_NAME") or zone_data.get("SHOT_ZONE_BASIC")
+                if zone_name:
+                    league_avg_lookup[zone_name] = safe_decimal(zone_data.get("FG_PCT"))
+        elif isinstance(league_averages, dict):
+            league_avg_lookup = {k: safe_decimal(v) for k, v in league_averages.items()}
+
+        for shot_row in shot_data:
+            try:
+                pid = shot_row.get("PLAYER_ID")
+                if not pid:
+                    continue
+                player = db.query(Player).filter(Player.nba_id == pid).first()
+                if not player:
+                    continue
+
+                zone_name = shot_row.get("ZONE_NAME") or shot_row.get("SHOT_ZONE_BASIC", "Unknown")
+                fgm = safe_decimal(shot_row.get("FGM"))
+                fga = safe_decimal(shot_row.get("FGA"))
+                fg_pct = safe_decimal(shot_row.get("FG_PCT"))
+                total_fga = safe_decimal(shot_row.get("TOTAL_FGA"))
+                freq = None
+                if total_fga and total_fga > 0 and fga is not None:
+                    freq = fga / total_fga
+                league_avg = league_avg_lookup.get(zone_name)
+
+                existing = (
+                    db.query(PlayerShotZonesModel)
+                    .filter(
+                        PlayerShotZonesModel.player_id == player.id,
+                        PlayerShotZonesModel.season == season,
+                        PlayerShotZonesModel.zone == zone_name,
+                    )
+                    .first()
+                )
+                if not existing:
+                    existing = PlayerShotZonesModel(player_id=player.id, season=season, zone=zone_name)
+                    db.add(existing)
+
+                existing.fgm = fgm
+                existing.fga = fga
+                existing.fg_pct = fg_pct
+                existing.freq = freq
+                existing.league_avg = league_avg
+
+            except Exception as e:
+                logger.error("Error processing shot zone data: %s", e)
+                errors += 1
+
+        db.commit()
+
+        logger.info("Advanced data refresh completed: %d processed, %d errors", processed, errors)
+        return {"status": "success", "processed": processed, "errors": errors, "season": season}
+
+    except Exception as e:
+        logger.exception("Advanced data refresh failed: %s", e)
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
+
+
+@celery_app.task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_kwargs={"max_retries": 3},
+    acks_late=True,
+)
+def refresh_phase2_data(self, season: str | None = None) -> dict:
+    """Fetch Phase 2 data: shooting tracking, computed metrics, and career stats.
+
+    Args:
+        season: NBA season string. Defaults to current season.
+
+    Returns:
+        dict with status and counts
+    """
+    from decimal import Decimal
+
+    from app.models import Player
+    from app.models.advanced_stats import PlayerAdvancedStats
+    from app.models.career_stats import PlayerCareerStats as PlayerCareerStatsModel
+    from app.models.clutch_stats import PlayerClutchStats as PlayerClutchStatsModel
+    from app.models.computed_advanced import PlayerComputedAdvanced
+    from app.models.defensive_matchups import PlayerDefensiveStats as PlayerDefensiveStatsModel
+    from app.models.season_play_type_stats import SeasonPlayTypeStats
+    from app.models.season_stats import SeasonStats
+    from app.models.shooting_tracking import PlayerShootingTracking
+    from app.services.nba_data import NBADataService
+    from app.services.rate_limiter import CircuitBreakerError, RateLimitError
+
+    season = season or get_current_season()
+    logger.info("Starting Phase 2 data refresh for season %s", season)
+
+    db = SessionLocal()
+    try:
+        service = NBADataService(bypass_cache=True)
+
+        # Import the fetch functions from the script
+        from scripts.fetch_phase2_data import (
+            compute_and_store_metrics,
+            fetch_and_store_career_stats,
+            fetch_and_store_shooting_tracking,
+        )
+
+        # Part A: Shooting tracking
+        part_a = fetch_and_store_shooting_tracking(season, db, service)
+        logger.info("Part A result: %s", part_a)
+
+        # Part B: Computed metrics
+        part_b = compute_and_store_metrics(season, db, service)
+        logger.info("Part B result: %s", part_b)
+
+        # Part C: Career stats (limited to top 50 for task runtime)
+        part_c = fetch_and_store_career_stats(db, service, career_limit=50)
+        logger.info("Part C result: %s", part_c)
+
+        processed = (
+            part_a.get("processed", 0)
+            + part_b.get("stored", 0)
+            + part_c.get("processed", 0)
+        )
+        errors = (
+            part_a.get("errors", 0)
+            + part_b.get("errors", 0)
+            + part_c.get("errors", 0)
+        )
+
+        logger.info(
+            "Phase 2 data refresh completed: %d processed, %d errors",
+            processed,
+            errors,
+        )
+        return {
+            "status": "success",
+            "processed": processed,
+            "errors": errors,
+            "season": season,
+        }
+
+    except Exception as e:
+        logger.exception("Phase 2 data refresh failed: %s", e)
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
+
+
 @celery_app.task(bind=True)
 def daily_data_refresh(self, season: str | None = None) -> dict:
     """Orchestrate the full daily data refresh.
 
-    Runs tracking data first, then impact and play type data in parallel,
+    Runs tracking data first, then impact, play type, and advanced data in parallel,
     followed by metric recalculation.
 
     Args:
@@ -614,14 +1007,16 @@ def daily_data_refresh(self, season: str | None = None) -> dict:
     season = season or get_current_season()
     logger.info("Starting daily data refresh for season %s", season)
 
-    # Chain: tracking first, then group of impact + play_type, then recalculate metrics
+    # Chain: tracking first, then Phase 1 group, then Phase 2 (depends on Phase 1), then recalculate
     workflow = chain(
         refresh_tracking_data.s(season),
         group(
             refresh_impact_data.s(season),
             refresh_play_type_data.s(season),
+            refresh_advanced_data.s(season),
         ),
-        recalculate_metrics.si(season),  # si() ignores previous result
+        refresh_phase2_data.si(season),  # si() ignores previous result; depends on Phase 1 data
+        recalculate_metrics.si(season),
     )
 
     result = workflow.apply_async()
