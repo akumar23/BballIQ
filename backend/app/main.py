@@ -5,7 +5,7 @@ from app.api.routes import advanced_stats, computed_stats, impact, leaderboards,
 from app.core.config import settings
 
 app = FastAPI(
-    title="CourtVision API",
+    title="StatFloor API",
     description="Per-touch offensive and defensive metrics for NBA players",
     version="0.1.0",
 )

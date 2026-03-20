@@ -18,7 +18,7 @@
 - **added player card page with mock data** (`fc902b4`)
 
 ## 2026-03-13
-- **update branding to CourtVision** (`9c41187`)
+- **update branding to StatFloor** (`9c41187`)
 
 ## 2026-03-11
 - **add recalculation job** (`5ee9abc`)
