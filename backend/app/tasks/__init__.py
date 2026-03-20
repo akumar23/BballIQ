@@ -1,4 +1,4 @@
-"""Celery tasks for CourtVision."""
+"""Celery tasks for StatFloor."""
 
 from app.tasks.data_refresh import (
     daily_data_refresh,

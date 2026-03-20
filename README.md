@@ -1,4 +1,4 @@
-# CourtVision
+# StatFloor
 
 Per-touch offensive and defensive metrics for every NBA player.
 
@@ -340,7 +340,7 @@ Open your web browser and go to:
 
 **http://localhost:5173**
 
-You should see the CourtVision leaderboard!
+You should see the StatFloor leaderboard!
 
 ---
 

@@ -1,4 +1,4 @@
-"""Services module for CourtVision.
+"""Services module for StatFloor.
 
 This module provides:
 - NBA API data fetching with rate limiting

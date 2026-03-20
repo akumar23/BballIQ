@@ -587,7 +587,7 @@ Environment variables for caching:
     setup_logging(args.verbose)
 
     print("\n" + "=" * 60)
-    print("CourtVision Data Fetcher")
+    print("StatFloor Data Fetcher")
     print("=" * 60)
 
     # Handle cache invalidation command
