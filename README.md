@@ -504,6 +504,40 @@ cd backend
 source .venv/bin/activate  # or .venv\Scripts\activate on Windows
 python -m scripts.fetch_data --season 2024-25
 ```
+
+### Fetching Historical Seasons
+
+You can backfill multiple seasons at once using `--from-season` or `--seasons`. Both `fetch_data.py` and `fetch_advanced_data.py` support these flags.
+
+**Fetch all seasons from a start year up to the current season:**
+```bash
+# Docker
+docker-compose exec backend python -m scripts.fetch_data --from-season 2020-21
+
+# Local
+python -m scripts.fetch_data --from-season 2020-21
+```
+This fetches 2020-21, 2021-22, 2022-23, 2023-24, and 2024-25 in order.
+
+**Specify a custom end season:**
+```bash
+python -m scripts.fetch_data --from-season 2018-19 --season 2022-23
+```
+
+**Fetch an explicit list of seasons:**
+```bash
+python -m scripts.fetch_data --seasons 2022-23 2023-24 2024-25
+```
+
+**Same flags work for advanced data:**
+```bash
+python -m scripts.fetch_advanced_data --from-season 2020-21
+python -m scripts.fetch_advanced_data --seasons 2022-23 2023-24 2024-25
+```
+
+> Note: NBA tracking stats (touch, hustle, defensive) are available from 2013-14 onward.
+> Each season takes ~2-3 minutes to fetch due to API rate limits.
+
 To refresh with latest Impact Data:
 
 **With Docker**
