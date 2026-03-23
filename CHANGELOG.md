@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-03-22
+- **historical season fetching for data scripts**
+  - added `--from-season SEASON` flag to `fetch_data.py` and `fetch_advanced_data.py` — fetches all seasons from the given season up to `--season`
+  - added `--seasons SEASON [...]` flag to fetch an explicit list of seasons
+  - scripts now loop through all requested seasons and report any failures at the end
+
 ## 2026-03-17
 - **added additional stat API endpoints** (`31392f5`)
   - `GET /stats/advanced` — all players advanced stats

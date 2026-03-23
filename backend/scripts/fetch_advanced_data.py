@@ -13,6 +13,8 @@ Usage:
     python -m scripts.fetch_advanced_data --season 2024-25
     python -m scripts.fetch_advanced_data --season 2024-25 --create-tables
     python -m scripts.fetch_advanced_data --season 2024-25 --verbose
+    python -m scripts.fetch_advanced_data --from-season 2020-21
+    python -m scripts.fetch_advanced_data --seasons 2022-23 2023-24 2024-25
 """
 
 import argparse
@@ -81,6 +83,32 @@ def create_tables() -> None:
         logger.error("Migration failed: %s", e.stderr)
         print(f"[ERROR] Migration failed: {e.stderr}")
         raise
+
+
+def generate_season_range(from_season: str, to_season: str) -> list[str]:
+    """Generate a list of NBA season strings between two seasons (inclusive).
+
+    Args:
+        from_season: Start season in "YYYY-YY" format (e.g., "2020-21")
+        to_season: End season in "YYYY-YY" format (e.g., "2024-25")
+
+    Returns:
+        Ordered list of season strings from oldest to newest
+    """
+    def parse_start_year(season: str) -> int:
+        return int(season.split("-")[0])
+
+    start = parse_start_year(from_season)
+    end = parse_start_year(to_season)
+
+    if start > end:
+        raise ValueError(f"from-season {from_season} must be before to-season {to_season}")
+
+    seasons = []
+    for year in range(start, end + 1):
+        short_year = str(year + 1)[-2:]
+        seasons.append(f"{year}-{short_year}")
+    return seasons
 
 
 def safe_decimal(value, default=None) -> Decimal | None:
@@ -514,12 +542,26 @@ Examples:
     python -m scripts.fetch_advanced_data --season 2024-25 --create-tables
     python -m scripts.fetch_advanced_data --season 2024-25 --verbose
     python -m scripts.fetch_advanced_data --season 2024-25 --no-cache
+    python -m scripts.fetch_advanced_data --from-season 2020-21
+    python -m scripts.fetch_advanced_data --from-season 2020-21 --season 2024-25
+    python -m scripts.fetch_advanced_data --seasons 2022-23 2023-24 2024-25
         """,
     )
     parser.add_argument(
         "--season",
         default="2024-25",
-        help="NBA season (e.g., 2024-25)",
+        help="NBA season to fetch (e.g., 2024-25). Used as the end season when --from-season is set.",
+    )
+    parser.add_argument(
+        "--seasons",
+        nargs="+",
+        metavar="SEASON",
+        help="Fetch an explicit list of seasons (e.g., --seasons 2022-23 2023-24 2024-25). Overrides --season and --from-season.",
+    )
+    parser.add_argument(
+        "--from-season",
+        metavar="SEASON",
+        help="Fetch all seasons from this season up to --season (e.g., --from-season 2020-21).",
     )
     parser.add_argument(
         "--create-tables",
@@ -541,35 +583,60 @@ Examples:
 
     setup_logging(args.verbose)
 
+    # Determine which seasons to fetch
+    if args.seasons:
+        seasons_to_fetch = args.seasons
+    elif args.from_season:
+        try:
+            seasons_to_fetch = generate_season_range(args.from_season, args.season)
+        except ValueError as e:
+            print(f"[ERROR] {e}")
+            return 1
+    else:
+        seasons_to_fetch = [args.season]
+
     print("\n" + "=" * 60)
-    print("CORTEX Advanced Stats Data Fetcher")
+    print("StatFloor Advanced Stats Data Fetcher")
     print("=" * 60)
 
     print(f"\nConfiguration:")
-    print(f"  Season: {args.season}")
+    print(f"  Seasons: {', '.join(seasons_to_fetch)}")
     print(f"  Cache bypass: {args.no_cache}")
-    print(f"\n  NOTE: This script makes ~7 API calls")
-    print(f"        Expected runtime: 1-2 minutes with rate limiting")
+    print(f"\n  NOTE: This script makes ~7 API calls per season")
+    print(f"        Expected runtime: 1-2 minutes per season with rate limiting")
 
     if args.create_tables:
         create_tables()
 
     db = SessionLocal()
     try:
-        success = fetch_and_store_advanced_data(
-            args.season, db, verbose=args.verbose, bypass_cache=args.no_cache
-        )
+        failed_seasons = []
+        for i, season in enumerate(seasons_to_fetch):
+            if len(seasons_to_fetch) > 1:
+                print(f"\n{'=' * 60}")
+                print(f"Season {i + 1}/{len(seasons_to_fetch)}: {season}")
+                print("=" * 60)
+
+            success = fetch_and_store_advanced_data(
+                season, db, verbose=args.verbose, bypass_cache=args.no_cache
+            )
+
+            if not success:
+                failed_seasons.append(season)
+                logger.error("Failed to fetch advanced data for season %s", season)
+
         print_circuit_breaker_status()
         print_cache_status()
 
-        if success:
+        if not failed_seasons:
             print("\n" + "=" * 60)
-            print("Advanced data fetch completed successfully!")
+            seasons_label = ", ".join(seasons_to_fetch)
+            print(f"Advanced data fetch completed successfully! ({seasons_label})")
             print("=" * 60 + "\n")
             return 0
         else:
             print("\n" + "=" * 60)
-            print("[ERROR] Advanced data fetch failed!")
+            print(f"[ERROR] Advanced data fetch failed for: {', '.join(failed_seasons)}")
             print("=" * 60 + "\n")
             return 1
 

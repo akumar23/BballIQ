@@ -11,6 +11,8 @@ Usage:
     python -m scripts.fetch_data --season 2024-25
     python -m scripts.fetch_data --season 2024-25 --create-tables
     python -m scripts.fetch_data --season 2024-25 --verbose
+    python -m scripts.fetch_data --from-season 2020-21
+    python -m scripts.fetch_data --seasons 2022-23 2023-24 2024-25
 """
 
 import argparse
@@ -499,6 +501,32 @@ def calculate_percentiles(season: str, db: Session) -> None:
     logger.info("Percentiles calculated for %d players", len(stats))
 
 
+def generate_season_range(from_season: str, to_season: str) -> list[str]:
+    """Generate a list of NBA season strings between two seasons (inclusive).
+
+    Args:
+        from_season: Start season in "YYYY-YY" format (e.g., "2020-21")
+        to_season: End season in "YYYY-YY" format (e.g., "2024-25")
+
+    Returns:
+        Ordered list of season strings from oldest to newest
+    """
+    def parse_start_year(season: str) -> int:
+        return int(season.split("-")[0])
+
+    start = parse_start_year(from_season)
+    end = parse_start_year(to_season)
+
+    if start > end:
+        raise ValueError(f"from-season {from_season} must be before to-season {to_season}")
+
+    seasons = []
+    for year in range(start, end + 1):
+        short_year = str(year + 1)[-2:]
+        seasons.append(f"{year}-{short_year}")
+    return seasons
+
+
 def print_circuit_breaker_status() -> None:
     """Print current circuit breaker status."""
     state = nba_api_circuit_breaker.state
@@ -538,6 +566,9 @@ Examples:
     python -m scripts.fetch_data --season 2024-25 --create-tables
     python -m scripts.fetch_data --season 2024-25 --verbose
     python -m scripts.fetch_data --season 2024-25 --no-cache
+    python -m scripts.fetch_data --from-season 2020-21
+    python -m scripts.fetch_data --from-season 2020-21 --season 2024-25
+    python -m scripts.fetch_data --seasons 2022-23 2023-24 2024-25
     python -m scripts.fetch_data --invalidate-cache 2024-25
 
 Environment variables for rate limiting:
@@ -558,7 +589,18 @@ Environment variables for caching:
     parser.add_argument(
         "--season",
         default="2024-25",
-        help="NBA season (e.g., 2024-25)",
+        help="NBA season to fetch (e.g., 2024-25). Used as the end season when --from-season is set.",
+    )
+    parser.add_argument(
+        "--seasons",
+        nargs="+",
+        metavar="SEASON",
+        help="Fetch an explicit list of seasons (e.g., --seasons 2022-23 2023-24 2024-25). Overrides --season and --from-season.",
+    )
+    parser.add_argument(
+        "--from-season",
+        metavar="SEASON",
+        help="Fetch all seasons from this season up to --season (e.g., --from-season 2020-21).",
     )
     parser.add_argument(
         "--create-tables",
@@ -598,8 +640,20 @@ Environment variables for caching:
         print_cache_status()
         return 0
 
+    # Determine which seasons to fetch
+    if args.seasons:
+        seasons_to_fetch = args.seasons
+    elif args.from_season:
+        try:
+            seasons_to_fetch = generate_season_range(args.from_season, args.season)
+        except ValueError as e:
+            print(f"[ERROR] {e}")
+            return 1
+    else:
+        seasons_to_fetch = [args.season]
+
     print(f"\nConfiguration:")
-    print(f"  Season: {args.season}")
+    print(f"  Seasons: {', '.join(seasons_to_fetch)}")
     print(f"  Base delay: {settings.nba_api_base_delay}s")
     print(f"  Max retries: {settings.nba_api_max_retries}")
     print(f"  Backoff max: {settings.nba_api_backoff_max}s")
@@ -614,20 +668,33 @@ Environment variables for caching:
 
     db = SessionLocal()
     try:
-        success = fetch_and_store_data(
-            args.season, db, verbose=args.verbose, bypass_cache=args.no_cache
-        )
+        failed_seasons = []
+        for i, season in enumerate(seasons_to_fetch):
+            if len(seasons_to_fetch) > 1:
+                print(f"\n{'=' * 60}")
+                print(f"Season {i + 1}/{len(seasons_to_fetch)}: {season}")
+                print("=" * 60)
+
+            success = fetch_and_store_data(
+                season, db, verbose=args.verbose, bypass_cache=args.no_cache
+            )
+
+            if not success:
+                failed_seasons.append(season)
+                logger.error("Failed to fetch data for season %s", season)
+
         print_circuit_breaker_status()
         print_cache_status()
 
-        if success:
+        if not failed_seasons:
             print("\n" + "=" * 60)
-            print("Data fetch completed successfully!")
+            seasons_label = ", ".join(seasons_to_fetch)
+            print(f"Data fetch completed successfully! ({seasons_label})")
             print("=" * 60 + "\n")
             return 0
         else:
             print("\n" + "=" * 60)
-            print("[ERROR] Data fetch failed!")
+            print(f"[ERROR] Data fetch failed for: {', '.join(failed_seasons)}")
             print("=" * 60 + "\n")
             return 1
 
