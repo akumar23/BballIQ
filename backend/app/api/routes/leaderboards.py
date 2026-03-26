@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models import Player, SeasonStats
 from app.schemas.player import PlayerList, PlayerPerGameStats
+from app.schemas.leaderboard import SeasonsList
 
 router = APIRouter()
 
@@ -155,4 +156,24 @@ async def get_overall_leaderboard(
             },
         )
         for player, stats in results
+    ]
+
+@router.get("/seasons", response_model=list[SeasonsList])
+async def get_leaderboard_seasons(
+    db: Session = Depends(get_db)
+):
+    
+    """Get list of seasons with available leaderboard data."""
+    results = (
+        db.query(SeasonStats.season)
+        .distinct()
+        .order_by(desc(SeasonStats.season))
+        .all()
+        )
+
+    return[
+        SeasonsList(
+            season=row.season
+        )
+        for row in results
     ]
