@@ -1,5 +1,6 @@
-import type { ImpactLeaderboardEntry, Player, PlayerDetail, PlayerImpact, PlayerPerGameStats } from '@/types'
+import type { ImpactLeaderboardEntry, Player, PlayerCardOption, PlayerDetail, PlayerImpact, PlayerPerGameStats } from '@/types'
 import type { PlayTypeKey, PlayTypeLeaderboardResponse, PlayTypeSortBy, PlayerPlayTypeStats } from '@/types/playType'
+import type { PlayerCardData } from '@/types/playerCard'
 
 const API_BASE = '/api'
 
@@ -12,6 +13,9 @@ async function fetchJson<T>(url: string): Promise<T> {
 }
 
 export const api = {
+  seasons: {
+    list: () => fetchJson<string[]>('/players/seasons'),
+  },
   players: {
     list: (params?: { season?: string; position?: string; team?: string }) => {
       const searchParams = new URLSearchParams()
@@ -21,9 +25,14 @@ export const api = {
       const query = searchParams.toString()
       return fetchJson<Player[]>(`/players${query ? `?${query}` : ''}`)
     },
+    available: () => fetchJson<PlayerCardOption[]>('/players/available'),
     get: (id: number, season?: string) => {
       const query = season ? `?season=${season}` : ''
       return fetchJson<PlayerDetail>(`/players/${id}${query}`)
+    },
+    card: (id: number, season?: string) => {
+      const query = season ? `?season=${season}` : ''
+      return fetchJson<PlayerCardData>(`/players/${id}/card${query}`)
     },
   },
   leaderboards: {

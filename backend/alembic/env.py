@@ -17,6 +17,13 @@ from app.models import (  # noqa: F401
     ContextualizedImpact,
     GamePlayTypeStats,
     SeasonPlayTypeStats,
+    PlayerAdvancedStats,
+    PlayerShotZones,
+    PlayerClutchStats,
+    PlayerDefensiveStats,
+    PlayerComputedAdvanced,
+    PlayerCareerStats,
+    PlayerShootingTracking,
 )
 
 # Import settings to get database URL

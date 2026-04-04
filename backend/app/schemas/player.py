@@ -59,3 +59,16 @@ class PlayerDetail(PlayerList):
 
     class Config:
         from_attributes = True
+
+
+class PlayerCardOption(BaseModel):
+    """A single player+season entry for the player card selector dropdown."""
+
+    id: int
+    name: str
+    position: str | None
+    team_abbreviation: str | None
+    season: str
+
+    class Config:
+        from_attributes = True

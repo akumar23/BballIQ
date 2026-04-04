@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { usePerGameLeaderboard, useLeaderboardSeasons } from '@/hooks/usePlayers'
 import { cn } from '@/lib/utils'
 import type { PlayerPerGameStats } from '@/types'
-
 type StatKey = 'ppg' | 'rpg' | 'apg' | 'mpg' | 'spg' | 'bpg'
 
 const TABS: { key: StatKey; label: string }[] = [

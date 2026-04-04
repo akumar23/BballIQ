@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { useLeaderboard } from '@/hooks/usePlayers'
 import PlayerCard from '@/components/PlayerCard'
 import { cn } from '@/lib/utils'
+import { useSeason } from '@/context/SeasonContext'
 
 type LeaderboardType = 'offensive' | 'defensive' | 'overall'
 
 export default function LeaderboardPage() {
   const [type, setType] = useState<LeaderboardType>('overall')
-  const { data: players, isLoading, error } = useLeaderboard(type)
+  const { season } = useSeason()
+  const { data: players, isLoading, error } = useLeaderboard(type, season)
 
   const tabs: { key: LeaderboardType; label: string }[] = [
     { key: 'overall', label: 'Overall' },

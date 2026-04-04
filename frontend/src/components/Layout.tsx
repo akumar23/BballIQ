@@ -1,11 +1,14 @@
 import { Link } from 'react-router-dom'
 import type { ReactNode } from 'react'
+import { useSeason } from '@/context/SeasonContext'
 
 interface LayoutProps {
   children: ReactNode
 }
 
 export default function Layout({ children }: LayoutProps) {
+  const { season, setSeason, availableSeasons } = useSeason()
+
   return (
     <div className="min-h-screen">
       <header className="bg-white shadow-sm">
@@ -14,7 +17,7 @@ export default function Layout({ children }: LayoutProps) {
             <Link to="/" className="text-xl font-bold text-gray-900">
               StatFloor
             </Link>
-            <div className="flex gap-6">
+            <div className="flex items-center gap-6">
               <Link to="/leaderboard" className="text-gray-600 hover:text-gray-900">
                 Leaderboard
               </Link>
@@ -33,6 +36,17 @@ export default function Layout({ children }: LayoutProps) {
               <Link to="/player-card" className="text-gray-600 hover:text-gray-900">
                 Player Card
               </Link>
+              {availableSeasons.length > 0 && (
+                <select
+                  value={season}
+                  onChange={e => setSeason(e.target.value)}
+                  className="text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  {availableSeasons.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
         </nav>

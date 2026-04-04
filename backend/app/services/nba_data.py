@@ -855,7 +855,7 @@ class NBADataService:
                 continue
 
             # GROUP_NAME contains player names
-            group_name = lineup.get("GROUP_NAME", "")
+            group_name = lineup.get("GROUP_NAME") or ""
             player_names = [n.strip() for n in group_name.split("-")]
 
             lineups.append(
@@ -1191,7 +1191,13 @@ class NBADataService:
             distance_range="By Zone",
             per_mode_detailed="PerGame",
         )
-        result = shots.get_normalized_dict().get("ShotLocations", [])
+        # get_normalized_dict() fails when the API returns nested column headers
+        # (unhashable type: 'dict'). Use get_data_frames() which is more robust.
+        try:
+            dfs = shots.get_data_frames()
+            result = dfs[0].to_dict("records") if dfs else []
+        except Exception:
+            result = shots.get_normalized_dict().get("ShotLocations", [])
 
         # Cache the result
         redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
@@ -1268,9 +1274,9 @@ class NBADataService:
         clutch = self._request_with_retry(
             LeagueDashPlayerClutch,
             season=season,
-            clutch_time_nullable="Last 5 Minutes",
-            ahead_behind_nullable="Ahead or Behind",
-            point_diff_nullable=5,
+            ahead_behind="Ahead or Behind",
+            clutch_time="Last 5 Minutes",
+            point_diff=5,
             per_mode_detailed="PerGame",
             measure_type_detailed_defense="Base",
         )
