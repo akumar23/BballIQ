@@ -208,17 +208,18 @@ def fetch_and_store_data(
 
     for player_id, data in tracking_data.items():
         try:
-            # Upsert player
+            # Upsert player using ON CONFLICT DO NOTHING to avoid UniqueViolation
+            # when re-running for multiple seasons (players already exist from prior runs)
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+            stmt = pg_insert(Player.__table__).values(
+                nba_id=player_id,
+                name=data.player_name,
+                team_abbreviation=data.team_abbreviation,
+                active=True,
+            ).on_conflict_do_nothing(index_elements=["nba_id"])
+            db.execute(stmt)
+            db.flush()
             player = db.query(Player).filter(Player.nba_id == player_id).first()
-            if not player:
-                player = Player(
-                    nba_id=player_id,
-                    name=data.player_name,
-                    team_abbreviation=data.team_abbreviation,
-                    active=True,
-                )
-                db.add(player)
-                db.flush()
 
             # Calculate rates for metrics
             if data.touches > 0:
