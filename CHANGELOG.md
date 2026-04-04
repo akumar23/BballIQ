@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-04-03
+- **player card page with live data** (`956084b`, `7d507ff`)
+  - added `GET /players/{player_id}/card` backend endpoint serving real stats from the database
+  - replaced mock player card UI with live API data; added player and season selectors
+- **global season selector in navbar** (`cb9f698`)
+  - added `SeasonContext` and a season dropdown in the navbar that propagates the selected season across pages
+- **historical data support for league leaders** (`38cf5e8`, `7ff0b29`)
+  - added `useLeaderboardSeasons` hook and per-page season dropdown on the League Leaders page
+  - backend support for querying leaderboard data by arbitrary season
+- **fixes**
+  - `ON CONFLICT DO NOTHING` for player upserts to support multi-season backfills (`09cd6e6`)
+  - team abbreviation lookup now built from static `nba_api` data instead of the players table (`0ec1c8d`)
+  - resolved NBA API parameter deprecations in clutch and shot location stats fetchers (`a4d29a4`)
+  - widened `tm_tov_pct` column precision to handle 100% edge case (`e6c15b3`)
+
 ## 2026-03-22
 - **historical season fetching for data scripts**
   - added `--from-season SEASON` flag to `fetch_data.py` and `fetch_advanced_data.py` — fetches all seasons from the given season up to `--season`
