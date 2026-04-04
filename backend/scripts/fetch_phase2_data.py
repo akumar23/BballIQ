@@ -327,7 +327,6 @@ def compute_and_store_metrics(
     try:
         team_base_data = service.get_team_stats(season, "Base")
         team_base_by_id = {t["TEAM_ID"]: t for t in team_base_data}
-        team_base_by_abbr = {t["TEAM_ABBREVIATION"]: t for t in team_base_data}
         print(f"  - Fetched base team stats for {len(team_base_by_id)} teams")
     except (CircuitBreakerError, RateLimitError) as e:
         print(f"  [ERROR] Failed to fetch team base stats: {e}")
@@ -336,12 +335,31 @@ def compute_and_store_metrics(
 
     try:
         team_adv_data = service.get_team_stats(season, "Advanced")
-        team_adv_by_abbr = {t["TEAM_ABBREVIATION"]: t for t in team_adv_data}
-        print(f"  - Fetched advanced team stats for {len(team_adv_by_abbr)} teams")
+        team_adv_by_id = {t["TEAM_ID"]: t for t in team_adv_data}
+        print(f"  - Fetched advanced team stats for {len(team_adv_by_id)} teams")
     except (CircuitBreakerError, RateLimitError) as e:
         print(f"  [ERROR] Failed to fetch team advanced stats: {e}")
         logger.error("Failed to fetch team advanced stats: %s", e)
         return {"status": "error", "message": str(e)}
+
+    # Build team_id -> abbreviation mapping from nba_api static data
+    from nba_api.stats.static import teams as nba_teams
+    team_id_to_abbr: dict[int, str] = {
+        t["id"]: t["abbreviation"] for t in nba_teams.get_teams()
+    }
+
+    # Reconstruct abbreviation-keyed dicts for downstream lookups
+    team_base_by_abbr: dict[str, dict] = {
+        team_id_to_abbr[t["TEAM_ID"]]: t
+        for t in team_base_data
+        if t["TEAM_ID"] in team_id_to_abbr
+    }
+    team_adv_by_abbr: dict[str, dict] = {
+        team_id_to_abbr[t["TEAM_ID"]]: t
+        for t in team_adv_data
+        if t["TEAM_ID"] in team_id_to_abbr
+    }
+    print(f"  - Built abbreviation lookup for {len(team_base_by_abbr)} teams")
 
     # Step 2: Fetch per-100 possession stats
     print("\nStep 2: Fetching per-100 possession stats...")
@@ -460,7 +478,9 @@ def compute_and_store_metrics(
     # Build team stats dict
     per_team_stats: dict[str, TeamStats] = {}
     for t in team_base_data:
-        abbr = t["TEAM_ABBREVIATION"]
+        abbr = team_id_to_abbr.get(t["TEAM_ID"], "")
+        if not abbr:
+            continue
         adv = team_adv_by_abbr.get(abbr, {})
         per_team_stats[abbr] = TeamStats(
             team_id=t.get("TEAM_ID", 0),
