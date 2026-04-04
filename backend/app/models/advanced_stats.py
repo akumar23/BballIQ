@@ -55,6 +55,6 @@ class PlayerAdvancedStats(Base):
     reb_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
 
     # Turnover percentage
-    tm_tov_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
+    tm_tov_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 1))
 
     player = relationship("Player", back_populates="advanced_stats")
