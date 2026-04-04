@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useImpactLeaderboard } from '@/hooks/useImpact'
 import { cn, formatMetric, getPercentileColor } from '@/lib/utils'
 import type { ImpactLeaderboardEntry } from '@/types'
+import { useSeason } from '@/context/SeasonContext'
 
 type SortType = 'net' | 'offense' | 'defense'
 
@@ -122,7 +123,8 @@ function PlayerImpactRow({ player, rank }: { player: ImpactLeaderboardEntry; ran
 
 export default function ImpactPage() {
   const [sortBy, setSortBy] = useState<SortType>('net')
-  const { data: players, isLoading, error } = useImpactLeaderboard(sortBy)
+  const { season } = useSeason()
+  const { data: players, isLoading, error } = useImpactLeaderboard(sortBy, season)
 
   const tabs: { key: SortType; label: string; description: string }[] = [
     { key: 'net', label: 'Net Impact', description: 'Overall on/off adjusted for context' },

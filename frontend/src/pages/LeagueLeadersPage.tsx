@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { usePerGameLeaderboard } from '@/hooks/usePlayers'
 import { cn } from '@/lib/utils'
 import type { PlayerPerGameStats } from '@/types'
+import { useSeason } from '@/context/SeasonContext'
 
 type StatKey = 'ppg' | 'rpg' | 'apg' | 'mpg' | 'spg' | 'bpg'
 
@@ -55,8 +56,9 @@ function PlayerRow({ player, rank, statKey }: { player: PlayerPerGameStats; rank
 }
 
 export default function LeagueLeadersPage() {
+  const { season } = useSeason()
   const [activeTab, setActiveTab] = useState<StatKey>('ppg')
-  const { data: players, isLoading, error } = usePerGameLeaderboard(activeTab, undefined, 50)
+  const { data: players, isLoading, error } = usePerGameLeaderboard(activeTab, season, 50)
 
   return (
     <div>

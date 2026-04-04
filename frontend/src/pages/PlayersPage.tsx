@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { usePlayers } from '@/hooks/usePlayers'
 import PlayerCard from '@/components/PlayerCard'
+import { useSeason } from '@/context/SeasonContext'
 
 export default function PlayersPage() {
   const [search, setSearch] = useState('')
-  const { data: players, isLoading, error } = usePlayers()
+  const { season } = useSeason()
+  const { data: players, isLoading, error } = usePlayers({ season })
 
   const filteredPlayers = players?.filter(player =>
     player.name.toLowerCase().includes(search.toLowerCase())

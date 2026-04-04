@@ -4,6 +4,7 @@ import { usePlayTypeLeaderboard } from '@/hooks/usePlayTypes'
 import { cn } from '@/lib/utils'
 import type { PlayTypeKey, PlayTypeSortBy, PlayTypeLeaderboardEntry } from '@/types/playType'
 import { PLAY_TYPE_LABELS, SORT_BY_LABELS } from '@/types/playType'
+import { useSeason } from '@/context/SeasonContext'
 
 const PLAY_TYPE_TABS: { key: PlayTypeKey; label: string }[] = [
   { key: 'isolation', label: 'Isolation' },
@@ -101,14 +102,15 @@ function PlayerRow({ entry, rank, sortBy }: { entry: PlayTypeLeaderboardEntry; r
 export default function PlayTypesPage() {
   const [activePlayType, setActivePlayType] = useState<PlayTypeKey>('isolation')
   const [sortBy, setSortBy] = useState<PlayTypeSortBy>('ppp')
-  const { data, isLoading, error } = usePlayTypeLeaderboard(activePlayType, sortBy, undefined, 50, 50)
+  const { season } = useSeason()
+  const { data, isLoading, error } = usePlayTypeLeaderboard(activePlayType, sortBy, season, 50, 50)
 
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Play Types</h1>
         <p className="text-gray-600 mt-1">
-          Offensive play type efficiency for the 2024-25 season (min. 50 possessions)
+          Offensive play type efficiency for the {season} season (min. 50 possessions)
         </p>
       </div>
 

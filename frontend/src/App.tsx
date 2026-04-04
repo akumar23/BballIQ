@@ -7,9 +7,11 @@ import LeagueLeadersPage from './pages/LeagueLeadersPage'
 import ImpactPage from './pages/ImpactPage'
 import PlayTypesPage from './pages/PlayTypesPage'
 import PlayerCardPage from './pages/PlayerCardPage'
+import { SeasonProvider } from './context/SeasonContext'
 
 function App() {
   return (
+    <SeasonProvider>
     <Layout>
       <Routes>
         <Route path="/" element={<LeaderboardPage />} />
@@ -22,6 +24,7 @@ function App() {
         <Route path="/player-card" element={<PlayerCardPage />} />
       </Routes>
     </Layout>
+    </SeasonProvider>
   )
 }
 
