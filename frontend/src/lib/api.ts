@@ -44,6 +44,7 @@ export const api = {
       fetchJson<Player[]>(`/leaderboards/overall?limit=${limit}${season ? `&season=${season}` : ''}`),
     perGame: (sortBy: string, season?: string, limit = 10) =>
       fetchJson<PlayerPerGameStats[]>(`/leaderboards/per-game?sort_by=${sortBy}&limit=${limit}${season ? `&season=${season}` : ''}`),
+    seasons: () => fetchJson<{ season: string }[]>('/leaderboards/seasons'),
   },
   impact: {
     leaderboard: (season?: string, sortBy: 'net' | 'offense' | 'defense' = 'net', limit = 50) =>
