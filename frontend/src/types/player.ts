@@ -43,3 +43,11 @@ export interface PlayerDetail extends Player {
   games_played: number | null
   tracking_stats: PlayerTrackingStats | null
 }
+
+export interface PlayerCardOption {
+  id: number
+  name: string
+  position: string | null
+  team_abbreviation: string | null
+  season: string
+}
