@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker
+  namespace: nba-stats
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: celery-worker
+  template:
+    metadata:
+      labels:
+        app: celery-worker
+    spec:
+      containers:
+        - name: celery-worker
+          image: nba-stats-backend:latest
+          imagePullPolicy: Never
+          command:
+            - celery
+            - -A
+            - app.core.celery_app
+            - worker
+            - --loglevel=info
+            - --queues=data_refresh
+            - --concurrency=1
+          env:
+            - name: DATABASE_URL
+              value: postgresql://postgres:postgres@db:5432/nba_stats
+            - name: REDIS_URL
+              value: redis://redis:6379/0
+            - name: CELERY_BROKER_URL
+              value: redis://redis:6379/1
+            - name: CELERY_RESULT_BACKEND
+              value: redis://redis:6379/2
+            - name: NBA_API_CACHE_DIR
+              value: /app/data/nba_api_cache
+          volumeMounts:
+            - name: nba-api-cache
+              mountPath: /app/data/nba_api_cache
+      volumes:
+        - name: nba-api-cache
+          emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-beat
+  namespace: nba-stats
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: celery-beat
+  template:
+    metadata:
+      labels:
+        app: celery-beat
+    spec:
+      containers:
+        - name: celery-beat
+          image: nba-stats-backend:latest
+          imagePullPolicy: Never
+          command:
+            - celery
+            - -A
+            - app.core.celery_app
+            - beat
+            - --loglevel=info
+          env:
+            - name: DATABASE_URL
+              value: postgresql://postgres:postgres@db:5432/nba_stats
+            - name: REDIS_URL
+              value: redis://redis:6379/0
+            - name: CELERY_BROKER_URL
+              value: redis://redis:6379/1
+            - name: CELERY_RESULT_BACKEND
+              value: redis://redis:6379/2
