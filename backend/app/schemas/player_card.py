@@ -43,7 +43,7 @@ class CardOnOff(BaseModel):
 class CardContextualized(BaseModel):
     raw_net_rtg: Decimal | None = None
     contextualized_net_rtg: Decimal | None = None
-    percentile: int | None = None
+    percentile: Decimal | None = None
 
 
 class CardImpact(BaseModel):
@@ -56,7 +56,7 @@ class CardPlayType(BaseModel):
     ppp: Decimal | None = None
     fg_pct: Decimal | None = None
     frequency: Decimal | None = None
-    ppp_percentile: int | None = None
+    ppp_percentile: Decimal | None = None
 
 
 class CardPlayTypes(BaseModel):
@@ -88,7 +88,7 @@ class CardIsoDefense(BaseModel):
     poss: int | None = None
     ppp: Decimal | None = None
     fg_pct: Decimal | None = None
-    percentile: int | None = None
+    percentile: Decimal | None = None
 
 
 class CardDefensive(BaseModel):

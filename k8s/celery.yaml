@@ -13,10 +13,12 @@ spec:
       labels:
         app: celery-worker
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: celery-worker
-          image: nba-stats-backend:latest
-          imagePullPolicy: Never
+          image: ghcr.io/akumar23/nba-stats-backend:latest
+          imagePullPolicy: Always
           command:
             - celery
             - -A
@@ -58,10 +60,12 @@ spec:
       labels:
         app: celery-beat
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: celery-beat
-          image: nba-stats-backend:latest
-          imagePullPolicy: Never
+          image: ghcr.io/akumar23/nba-stats-backend:latest
+          imagePullPolicy: Always
           command:
             - celery
             - -A
