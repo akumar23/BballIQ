@@ -31,6 +31,169 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_players_nba_id'), 'players', ['nba_id'], unique=True)
+    op.create_table('season_stats',
+    sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
+    sa.Column('player_id', sa.BigInteger(), nullable=False),
+    sa.Column('season', sa.String(length=10), nullable=False),
+    sa.Column('games_played', sa.Integer(), nullable=True),
+    sa.Column('total_minutes', sa.Numeric(precision=7, scale=2), nullable=True),
+    sa.Column('total_points', sa.Integer(), nullable=True),
+    sa.Column('total_assists', sa.Integer(), nullable=True),
+    sa.Column('total_rebounds', sa.Integer(), nullable=True),
+    sa.Column('total_ftm', sa.Integer(), nullable=True),
+    sa.Column('total_fta', sa.Integer(), nullable=True),
+    sa.Column('total_offensive_rebounds', sa.Integer(), nullable=True),
+    sa.Column('total_defensive_rebounds', sa.Integer(), nullable=True),
+    sa.Column('total_steals', sa.Integer(), nullable=True),
+    sa.Column('total_blocks', sa.Integer(), nullable=True),
+    sa.Column('total_turnovers', sa.Integer(), nullable=True),
+    sa.Column('total_fgm', sa.Integer(), nullable=True),
+    sa.Column('total_fga', sa.Integer(), nullable=True),
+    sa.Column('total_fg3m', sa.Integer(), nullable=True),
+    sa.Column('total_fg3a', sa.Integer(), nullable=True),
+    sa.Column('total_plus_minus', sa.Integer(), nullable=True),
+    sa.Column('total_touches', sa.Integer(), nullable=True),
+    sa.Column('total_front_court_touches', sa.Integer(), nullable=True),
+    sa.Column('total_time_of_possession', sa.Numeric(precision=8, scale=2), nullable=True),
+    sa.Column('avg_points_per_touch', sa.Numeric(precision=5, scale=3), nullable=True),
+    sa.Column('total_deflections', sa.Integer(), nullable=True),
+    sa.Column('total_contested_shots', sa.Integer(), nullable=True),
+    sa.Column('total_contested_shots_2pt', sa.Integer(), nullable=True),
+    sa.Column('total_contested_shots_3pt', sa.Integer(), nullable=True),
+    sa.Column('total_charges_drawn', sa.Integer(), nullable=True),
+    sa.Column('total_loose_balls_recovered', sa.Integer(), nullable=True),
+    sa.Column('total_box_outs', sa.Integer(), nullable=True),
+    sa.Column('total_box_outs_off', sa.Integer(), nullable=True),
+    sa.Column('total_box_outs_def', sa.Integer(), nullable=True),
+    sa.Column('total_screen_assists', sa.Integer(), nullable=True),
+    sa.Column('total_screen_assist_pts', sa.Integer(), nullable=True),
+    sa.Column('estimated_possessions', sa.Integer(), nullable=True),
+    sa.Column('offensive_metric', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('defensive_metric', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('overall_metric', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('offensive_percentile', sa.Integer(), nullable=True),
+    sa.Column('defensive_percentile', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['player_id'], ['players.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_season_stats_player_id'), 'season_stats', ['player_id'], unique=False)
+    op.create_index(op.f('ix_season_stats_season'), 'season_stats', ['season'], unique=False)
+    op.create_table('game_stats',
+    sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
+    sa.Column('player_id', sa.BigInteger(), nullable=False),
+    sa.Column('game_id', sa.BigInteger(), nullable=False),
+    sa.Column('game_date', sa.Date(), nullable=False),
+    sa.Column('minutes', sa.Numeric(precision=5, scale=2), nullable=True),
+    sa.Column('points', sa.Integer(), nullable=True),
+    sa.Column('assists', sa.Integer(), nullable=True),
+    sa.Column('rebounds', sa.Integer(), nullable=True),
+    sa.Column('steals', sa.Integer(), nullable=True),
+    sa.Column('blocks', sa.Integer(), nullable=True),
+    sa.Column('turnovers', sa.Integer(), nullable=True),
+    sa.Column('touches', sa.Integer(), nullable=True),
+    sa.Column('front_court_touches', sa.Integer(), nullable=True),
+    sa.Column('time_of_possession', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('avg_seconds_per_touch', sa.Numeric(precision=4, scale=2), nullable=True),
+    sa.Column('avg_dribbles_per_touch', sa.Numeric(precision=4, scale=2), nullable=True),
+    sa.Column('points_per_touch', sa.Numeric(precision=5, scale=3), nullable=True),
+    sa.Column('paint_touches', sa.Integer(), nullable=True),
+    sa.Column('post_touches', sa.Integer(), nullable=True),
+    sa.Column('elbow_touches', sa.Integer(), nullable=True),
+    sa.Column('deflections', sa.Integer(), nullable=True),
+    sa.Column('contested_shots_2pt', sa.Integer(), nullable=True),
+    sa.Column('contested_shots_3pt', sa.Integer(), nullable=True),
+    sa.Column('charges_drawn', sa.Integer(), nullable=True),
+    sa.Column('loose_balls_recovered', sa.Integer(), nullable=True),
+    sa.Column('offensive_metric', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('defensive_metric', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.ForeignKeyConstraint(['player_id'], ['players.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_game_stats_game_date'), 'game_stats', ['game_date'], unique=False)
+    op.create_index(op.f('ix_game_stats_game_id'), 'game_stats', ['game_id'], unique=False)
+    op.create_index(op.f('ix_game_stats_player_id'), 'game_stats', ['player_id'], unique=False)
+    op.create_table('per_75_stats',
+    sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
+    sa.Column('season_stats_id', sa.BigInteger(), nullable=False),
+    sa.Column('season', sa.String(length=10), nullable=False),
+    sa.Column('pts_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('fgm_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('fga_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('fg3m_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('fg3a_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('ftm_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('fta_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('ast_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('tov_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('reb_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('oreb_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('dreb_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('stl_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('blk_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('deflections_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('contested_shots_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('contested_2pt_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('contested_3pt_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('charges_drawn_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('loose_balls_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('box_outs_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('screen_assists_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('touches_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('front_court_touches_per_75', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('possessions_used', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['season_stats_id'], ['season_stats.id'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('season_stats_id')
+    )
+    op.create_index(op.f('ix_per_75_stats_season'), 'per_75_stats', ['season'], unique=False)
+    op.create_index(op.f('ix_per_75_stats_season_stats_id'), 'per_75_stats', ['season_stats_id'], unique=True)
+    op.create_table('player_on_off_stats',
+    sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
+    sa.Column('player_id', sa.BigInteger(), nullable=False),
+    sa.Column('season', sa.String(length=10), nullable=False),
+    sa.Column('on_court_minutes', sa.Numeric(precision=8, scale=2), nullable=True),
+    sa.Column('on_court_plus_minus', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('on_court_off_rating', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('on_court_def_rating', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('on_court_net_rating', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('off_court_minutes', sa.Numeric(precision=8, scale=2), nullable=True),
+    sa.Column('off_court_plus_minus', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('off_court_off_rating', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('off_court_def_rating', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('off_court_net_rating', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('plus_minus_diff', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('off_rating_diff', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('def_rating_diff', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('net_rating_diff', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.ForeignKeyConstraint(['player_id'], ['players.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_player_on_off_stats_player_id'), 'player_on_off_stats', ['player_id'], unique=False)
+    op.create_index(op.f('ix_player_on_off_stats_season'), 'player_on_off_stats', ['season'], unique=False)
+    op.create_table('contextualized_impact',
+    sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
+    sa.Column('player_id', sa.BigInteger(), nullable=False),
+    sa.Column('season', sa.String(length=10), nullable=False),
+    sa.Column('raw_net_rating_diff', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('raw_off_rating_diff', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('raw_def_rating_diff', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('avg_teammate_net_rating', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('teammate_adjustment', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('pct_minutes_vs_starters', sa.Numeric(precision=5, scale=2), nullable=True),
+    sa.Column('opponent_quality_factor', sa.Numeric(precision=5, scale=3), nullable=True),
+    sa.Column('total_on_court_minutes', sa.Numeric(precision=8, scale=2), nullable=True),
+    sa.Column('reliability_factor', sa.Numeric(precision=5, scale=3), nullable=True),
+    sa.Column('contextualized_off_impact', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('contextualized_def_impact', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('contextualized_net_impact', sa.Numeric(precision=6, scale=2), nullable=True),
+    sa.Column('impact_percentile', sa.Integer(), nullable=True),
+    sa.Column('offensive_impact_percentile', sa.Integer(), nullable=True),
+    sa.Column('defensive_impact_percentile', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['player_id'], ['players.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_contextualized_impact_player_id'), 'contextualized_impact', ['player_id'], unique=False)
+    op.create_index(op.f('ix_contextualized_impact_season'), 'contextualized_impact', ['season'], unique=False)
     op.create_table('game_play_type_stats',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
     sa.Column('player_id', sa.BigInteger(), nullable=False),
@@ -366,6 +529,22 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_game_play_type_stats_game_id'), table_name='game_play_type_stats')
     op.drop_index(op.f('ix_game_play_type_stats_game_date'), table_name='game_play_type_stats')
     op.drop_table('game_play_type_stats')
+    op.drop_index(op.f('ix_per_75_stats_season_stats_id'), table_name='per_75_stats')
+    op.drop_index(op.f('ix_per_75_stats_season'), table_name='per_75_stats')
+    op.drop_table('per_75_stats')
+    op.drop_index(op.f('ix_contextualized_impact_season'), table_name='contextualized_impact')
+    op.drop_index(op.f('ix_contextualized_impact_player_id'), table_name='contextualized_impact')
+    op.drop_table('contextualized_impact')
+    op.drop_index(op.f('ix_player_on_off_stats_season'), table_name='player_on_off_stats')
+    op.drop_index(op.f('ix_player_on_off_stats_player_id'), table_name='player_on_off_stats')
+    op.drop_table('player_on_off_stats')
+    op.drop_index(op.f('ix_game_stats_player_id'), table_name='game_stats')
+    op.drop_index(op.f('ix_game_stats_game_id'), table_name='game_stats')
+    op.drop_index(op.f('ix_game_stats_game_date'), table_name='game_stats')
+    op.drop_table('game_stats')
+    op.drop_index(op.f('ix_season_stats_season'), table_name='season_stats')
+    op.drop_index(op.f('ix_season_stats_player_id'), table_name='season_stats')
+    op.drop_table('season_stats')
     op.drop_index(op.f('ix_players_nba_id'), table_name='players')
     op.drop_table('players')
     # ### end Alembic commands ###

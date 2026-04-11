@@ -13,18 +13,20 @@ spec:
       labels:
         app: backend
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       initContainers:
         - name: migrate
-          image: nba-stats-backend:latest
-          imagePullPolicy: Never
+          image: ghcr.io/akumar23/nba-stats-backend:latest
+          imagePullPolicy: Always
           command: ["alembic", "upgrade", "head"]
           env:
             - name: DATABASE_URL
               value: postgresql://postgres:postgres@db:5432/nba_stats
       containers:
         - name: backend
-          image: nba-stats-backend:latest
-          imagePullPolicy: Never
+          image: ghcr.io/akumar23/nba-stats-backend:latest
+          imagePullPolicy: Always
           env:
             - name: DATABASE_URL
               value: postgresql://postgres:postgres@db:5432/nba_stats
