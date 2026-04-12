@@ -28,3 +28,5 @@ class Player(Base):
     computed_advanced = relationship("PlayerComputedAdvanced", back_populates="player")
     career_stats = relationship("PlayerCareerStats", back_populates="player")
     shooting_tracking = relationship("PlayerShootingTracking", back_populates="player")
+    matchups = relationship("PlayerMatchups", back_populates="player")
+    all_in_one_metrics = relationship("PlayerAllInOneMetrics", back_populates="player")

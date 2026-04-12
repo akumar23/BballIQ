@@ -40,15 +40,43 @@ class CardOnOff(BaseModel):
     net_swing: Decimal | None = None
 
 
+class CardAdjustmentStep(BaseModel):
+    name: str
+    value: Decimal | None = None
+    cumulative: Decimal | None = None
+    explanation: str = ""
+
+
 class CardContextualized(BaseModel):
     raw_net_rtg: Decimal | None = None
     contextualized_net_rtg: Decimal | None = None
     percentile: Decimal | None = None
+    adjustments: list[CardAdjustmentStep] = []
+
+
+class CardLineup(BaseModel):
+    players: list[str] = []
+    minutes: Decimal | None = None
+    raw_net: Decimal | None = None
+    ctx_net: Decimal | None = None
+    opp_tier: str = ""
+
+
+class CardWithoutTeammate(BaseModel):
+    teammate: str = ""
+    net_rtg: Decimal | None = None
+    minutes: Decimal | None = None
+
+
+class CardLineupContext(BaseModel):
+    top_lineups: list[CardLineup] = []
+    without_top_teammate: CardWithoutTeammate | None = None
 
 
 class CardImpact(BaseModel):
     on_off: CardOnOff | None = None
     contextualized: CardContextualized | None = None
+    actual_wins: int | None = None
 
 
 class CardPlayType(BaseModel):
@@ -91,11 +119,20 @@ class CardIsoDefense(BaseModel):
     percentile: Decimal | None = None
 
 
+class CardDefenseOverview(BaseModel):
+    contest_rate: Decimal | None = None
+    stl_rate: Decimal | None = None
+    blk_rate: Decimal | None = None
+    deflections_per_game: Decimal | None = None
+    rim_contests_per_game: Decimal | None = None
+
+
 class CardDefensive(BaseModel):
     overall: CardDefenseZone | None = None
     rim: CardDefenseZone | None = None
     three_point: CardDefenseZone | None = None
     iso_defense: CardIsoDefense | None = None
+    overview: CardDefenseOverview | None = None
 
 
 class CardRadar(BaseModel):
@@ -119,6 +156,94 @@ class CardCareerSeason(BaseModel):
     ft_pct: Decimal | None = None
     minutes: Decimal | None = None
     games_played: int | None = None
+    per: Decimal | None = None
+    ws48: Decimal | None = None
+    bpm: Decimal | None = None
+
+
+class CardAllInOne(BaseModel):
+    rapm: Decimal | None = None
+    rapm_offense: Decimal | None = None
+    rapm_defense: Decimal | None = None
+    rpm: Decimal | None = None
+    rpm_offense: Decimal | None = None
+    rpm_defense: Decimal | None = None
+    epm: Decimal | None = None
+    epm_offense: Decimal | None = None
+    epm_defense: Decimal | None = None
+    raptor: Decimal | None = None
+    raptor_offense: Decimal | None = None
+    raptor_defense: Decimal | None = None
+    lebron: Decimal | None = None
+    lebron_offense: Decimal | None = None
+    lebron_defense: Decimal | None = None
+    darko: Decimal | None = None
+    darko_offense: Decimal | None = None
+    darko_defense: Decimal | None = None
+
+
+class CardMatchup(BaseModel):
+    opponent: str
+    possessions: Decimal | None = None
+    dfg_pct: Decimal | None = None
+    pts_allowed: Decimal | None = None
+
+
+class CardLuckAdjusted(BaseModel):
+    x_wins: Decimal | None = None
+    clutch_epa: Decimal | None = None
+    clutch_epa_per_game: Decimal | None = None
+    garbage_time_ppg: Decimal | None = None
+
+
+class CardOpponentTierEntry(BaseModel):
+    tier: str
+    possessions: int | None = None
+    dfg_pct: Decimal | None = None
+    ppp_allowed: Decimal | None = None
+    weight: Decimal | None = None
+
+
+class CardSchemeScore(BaseModel):
+    scheme: str
+    fit_score: Decimal | None = None
+
+
+class CardPortability(BaseModel):
+    index: Decimal | None = None
+    grade: str | None = None
+    self_creation: Decimal | None = None
+    scheme_flexibility: Decimal | None = None
+    switchability: Decimal | None = None
+    low_dependency: Decimal | None = None
+    unassisted_rate_score: Decimal | None = None
+    self_created_ppp_score: Decimal | None = None
+    gravity_score: Decimal | None = None
+    creation_volume_score: Decimal | None = None
+    positions_guarded: dict[str, Decimal | None] | None = None
+    scheme_scores: list[CardSchemeScore] = []
+
+
+class CardChampionshipPillar(BaseModel):
+    name: str
+    score: Decimal | None = None
+    weight: Decimal | None = None
+
+
+class CardPlayoffProjection(BaseModel):
+    projected_ppg: Decimal | None = None
+    projected_ts: Decimal | None = None
+    reg_ppg: Decimal | None = None
+    reg_ts: Decimal | None = None
+
+
+class CardChampionship(BaseModel):
+    index: Decimal | None = None
+    tier: str | None = None
+    win_probability: Decimal | None = None
+    multiplier_vs_base: Decimal | None = None
+    pillars: list[CardChampionshipPillar] = []
+    playoff_projection: CardPlayoffProjection | None = None
 
 
 class PlayerCardData(BaseModel):
@@ -136,3 +261,11 @@ class PlayerCardData(BaseModel):
     shot_zones: list[CardShotZone] = []
     defensive: CardDefensive | None = None
     career: list[CardCareerSeason] = []
+    all_in_one: CardAllInOne | None = None
+    matchup_log: list[CardMatchup] = []
+    luck_adjusted: CardLuckAdjusted | None = None
+    opponent_tiers: list[CardOpponentTierEntry] = []
+    scheme_compatibility: list[CardSchemeScore] = []
+    portability: CardPortability | None = None
+    championship: CardChampionship | None = None
+    lineup_context: CardLineupContext | None = None

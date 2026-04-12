@@ -5,6 +5,8 @@ with exponential backoff, retry logic, circuit breaker protection, and
 Redis caching to minimize external API calls.
 """
 
+from __future__ import annotations
+
 import logging
 import time
 from dataclasses import dataclass
@@ -27,6 +29,7 @@ from nba_api.stats.endpoints.leaguedashptstats import LeagueDashPtStats
 from nba_api.stats.endpoints.leaguehustlestatsplayer import LeagueHustleStatsPlayer
 from nba_api.stats.endpoints.shotchartleaguewide import ShotChartLeagueWide
 from nba_api.stats.endpoints.synergyplaytypes import SynergyPlayTypes
+from nba_api.stats.endpoints.leagueseasonmatchups import LeagueSeasonMatchups
 from nba_api.stats.endpoints.teamplayeronoffsummary import TeamPlayerOnOffSummary
 from nba_api.stats.static import teams as nba_teams
 
@@ -1700,6 +1703,110 @@ class NBADataService:
 
         # Cache the result
         redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_matchup_stats(
+        self,
+        season: str = "2024-25",
+        def_player_id: int | None = None,
+        off_player_id: int | None = None,
+    ) -> list[dict]:
+        """Get player-vs-player matchup data from LeagueSeasonMatchups.
+
+        Can filter by defender or offensive player. If neither is specified,
+        returns all matchups (very large dataset).
+
+        Args:
+            season: NBA season string (e.g., "2024-25")
+            def_player_id: Filter by defender NBA player ID
+            off_player_id: Filter by offensive player NBA player ID
+
+        Returns:
+            List of matchup dictionaries with per-matchup shooting stats
+
+        Raises:
+            CircuitBreakerError: If circuit breaker is open
+            RateLimitError: If rate limited after max retries
+        """
+        # Build a specific cache key based on filters
+        suffix = f"{season}"
+        if def_player_id:
+            suffix += f":def_{def_player_id}"
+        if off_player_id:
+            suffix += f":off_{off_player_id}"
+        cache_key = f"{CacheKeyPrefix.NBA_MATCHUP_STATS.value}:{suffix}"
+
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info("Cache hit for matchup stats (%s)", suffix)
+                return cached
+
+        logger.info(
+            "Cache miss for matchup stats (%s), fetching from API", suffix
+        )
+
+        kwargs: dict[str, Any] = {
+            "season": season,
+            "per_mode_simple": "Totals",
+            "season_type_playoffs": "Regular Season",
+        }
+        if def_player_id:
+            kwargs["def_player_id_nullable"] = def_player_id
+        if off_player_id:
+            kwargs["off_player_id_nullable"] = off_player_id
+
+        matchups = self._request_with_retry(LeagueSeasonMatchups, **kwargs)
+        result = matchups.get_normalized_dict()["SeasonMatchups"]
+
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_all_matchup_stats(
+        self,
+        season: str = "2024-25",
+        player_ids: list[int] | None = None,
+        progress_callback: callable | None = None,
+    ) -> dict[int, list[dict]]:
+        """Fetch defensive matchup data for multiple players.
+
+        For each player, fetches their top matchups as a defender.
+
+        Args:
+            season: NBA season string (e.g., "2024-25")
+            player_ids: List of NBA player IDs to fetch matchups for.
+                If None, fetches for all players (expensive).
+            progress_callback: Optional callback(current, total, player_name)
+
+        Returns:
+            Dict keyed by defender player_id with list of matchup dicts
+        """
+        result: dict[int, list[dict]] = {}
+
+        if player_ids is None:
+            logger.warning("No player_ids provided, skipping matchup fetch")
+            return result
+
+        for idx, player_id in enumerate(player_ids):
+            if progress_callback:
+                progress_callback(idx + 1, len(player_ids), str(player_id))
+
+            try:
+                matchups = self.get_matchup_stats(
+                    season=season, def_player_id=player_id
+                )
+                # Sort by partial possessions descending to get top matchups
+                matchups.sort(
+                    key=lambda m: m.get("PARTIAL_POSS", 0) or 0, reverse=True
+                )
+                result[player_id] = matchups
+            except Exception as e:
+                logger.warning(
+                    "Failed to fetch matchups for player %d: %s", player_id, e
+                )
+                continue
+
+        logger.info("Fetched matchup data for %d players", len(result))
         return result
 
     def fetch_all_defensive_play_type_data(

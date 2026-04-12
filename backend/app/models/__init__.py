@@ -13,6 +13,8 @@ from app.models.defensive_matchups import PlayerDefensiveStats
 from app.models.computed_advanced import PlayerComputedAdvanced
 from app.models.career_stats import PlayerCareerStats
 from app.models.shooting_tracking import PlayerShootingTracking
+from app.models.player_matchups import PlayerMatchups
+from app.models.all_in_one_metrics import PlayerAllInOneMetrics
 
 __all__ = [
     "Player",
@@ -30,4 +32,6 @@ __all__ = [
     "PlayerComputedAdvanced",
     "PlayerCareerStats",
     "PlayerShootingTracking",
+    "PlayerMatchups",
+    "PlayerAllInOneMetrics",
 ]
