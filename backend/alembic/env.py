@@ -24,6 +24,8 @@ from app.models import (  # noqa: F401
     PlayerComputedAdvanced,
     PlayerCareerStats,
     PlayerShootingTracking,
+    PlayerMatchups,
+    PlayerAllInOneMetrics,
 )
 
 # Import settings to get database URL

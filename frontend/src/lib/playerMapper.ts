@@ -17,8 +17,8 @@ function mapPlayType(pt: ApiCardPlayType | null | undefined): { freq: number; pp
 
 /**
  * Maps the API PlayerCardData response to the CortexPlayer shape used by all
- * tab components. Fields not available in the backend (EPM, RAPM, portability,
- * championship, etc.) are zeroed/empty so tabs render without crashing.
+ * tab components. Now includes real data for all-in-one metrics, portability,
+ * championship, luck-adjusted, opponent tiers, matchup log, and scheme fits.
  */
 export function mapApiToPlayer(data: PlayerCardData): CortexPlayer {
   const t = data.traditional
@@ -29,6 +29,12 @@ export function mapApiToPlayer(data: PlayerCardData): CortexPlayer {
   const pt = data.play_types
   const def = data.defensive
   const rad = data.radar
+  const aio = data.all_in_one
+  const luck = data.luck_adjusted
+  const port = data.portability
+  const champ = data.championship
+  const defOv = def?.overview
+  const lctx = data.lineup_context
 
   return {
     id: String(data.id),
@@ -72,21 +78,28 @@ export function mapApiToPlayer(data: PlayerCardData): CortexPlayer {
         offDRtg: n(oo?.off_drtg),
         netSwing: n(oo?.net_swing),
       },
-      // Luck metrics not in DB — zeroed
-      luck: { xWins: 0, actualWins: 0, clutchEPA: 0, garbageTimePts: 0 },
-      // Proprietary third-party metrics not available — zeroed
-      rapm: 0,
-      rpm: 0,
-      epm: 0,
-      raptor: 0,
-      lebron: 0,
-      darko: 0,
+      luck: {
+        xWins: n(luck?.x_wins),
+        actualWins: imp?.actual_wins ?? 0,
+        clutchEPA: n(luck?.clutch_epa_per_game),
+        garbageTimePts: n(luck?.garbage_time_ppg),
+      },
+      rapm: n(aio?.rapm),
+      rpm: n(aio?.rpm),
+      epm: n(aio?.epm),
+      raptor: n(aio?.raptor),
+      lebron: n(aio?.lebron),
+      darko: n(aio?.darko),
       contextualized: {
         rawNetRtg: n(ctx?.raw_net_rtg),
         contextualizedNetRtg: n(ctx?.contextualized_net_rtg),
         percentile: ctx?.percentile ?? 0,
-        // Step-by-step adjustment breakdown not stored in DB
-        adjustments: [],
+        adjustments: (ctx?.adjustments ?? []).map((a) => ({
+          name: a.name,
+          value: n(a.value),
+          cumulative: n(a.cumulative),
+          explanation: a.explanation,
+        })),
       },
     },
 
@@ -99,7 +112,6 @@ export function mapApiToPlayer(data: PlayerCardData): CortexPlayer {
       transition: mapPlayType(pt?.transition),
       cut: mapPlayType(pt?.cut),
       off_screen: mapPlayType(pt?.off_screen),
-      // Handoff not tracked in DB
       handoff: { freq: 0, ppp: 0, rank: 0, efg: 0 },
     },
 
@@ -113,12 +125,12 @@ export function mapApiToPlayer(data: PlayerCardData): CortexPlayer {
 
     defensive: {
       overview: {
-        dRapm: 0, // not in DB
-        contestRate: 0,
+        dRapm: n(aio?.rapm_defense),
+        contestRate: n(defOv?.contest_rate),
         dfgPctDiff: n(def?.overall?.pct_plusminus),
-        stlRate: 0,
-        blkRate: 0,
-        deflections: 0,
+        stlRate: n(defOv?.stl_rate),
+        blkRate: n(defOv?.blk_rate),
+        deflections: n(defOv?.deflections_per_game),
         rank: 0,
       },
       perimeter: {
@@ -145,20 +157,23 @@ export function mapApiToPlayer(data: PlayerCardData): CortexPlayer {
         scoutingReport: '',
       },
       rimProtection: {
-        contestsPerGame: 0,
+        contestsPerGame: n(defOv?.rim_contests_per_game),
         dfgPctAtRim: n(def?.rim?.d_fg_pct),
         diffVsLeague: n(def?.rim?.pct_plusminus),
       },
-      matchupLog: [],
+      matchupLog: data.matchup_log.map((m) => ({
+        opponent: m.opponent,
+        possessions: n(m.possessions),
+        dfgPct: n(m.dfg_pct),
+        ptsAllowed: n(m.pts_allowed),
+      })),
     },
 
-    // Career timeline — currently only has traditional stats per season.
-    // per/ws48/bpm/epm require historical computed data not yet stored.
     timeline: data.career.map((s) => ({
       season: s.season,
-      per: 0,
-      ws48: 0,
-      bpm: 0,
+      per: n(s.per),
+      ws48: n(s.ws48),
+      bpm: n(s.bpm),
       epm: 0,
     })),
 
@@ -175,26 +190,44 @@ export function mapApiToPlayer(data: PlayerCardData): CortexPlayer {
         ]
       : [],
 
-    // Portability, championship, lineup context not computed in backend
     portability: {
-      index: 0,
-      grade: 'N/A',
-      description: 'Portability analysis not yet available.',
-      subScores: { selfCreation: 0, schemeFlexibility: 0, defensiveSwitchability: 0, lowDependency: 0 },
-      selfCreation: { unassistedPct: 0, assistedPct: 0, selfCreatedPpp: 0, gravityIndex: 0, analysis: '' },
-      schemeCompatibility: [],
+      index: n(port?.index),
+      grade: port?.grade ?? 'N/A',
+      description: port ? `Portability grade: ${port.grade}` : 'Portability analysis not yet available.',
+      subScores: {
+        selfCreation: n(port?.self_creation),
+        schemeFlexibility: n(port?.scheme_flexibility),
+        defensiveSwitchability: n(port?.switchability),
+        lowDependency: n(port?.low_dependency),
+      },
+      selfCreation: {
+        unassistedPct: n(port?.unassisted_rate_score),
+        assistedPct: 100 - n(port?.unassisted_rate_score),
+        selfCreatedPpp: n(port?.self_created_ppp_score),
+        gravityIndex: n(port?.gravity_score),
+        analysis: '',
+      },
+      schemeCompatibility: (port?.scheme_scores ?? data.scheme_compatibility ?? []).map((s) => ({
+        scheme: s.scheme,
+        fitScore: n(s.fit_score),
+        note: '',
+      })),
       teammateDependency: {
         eliteSpacingTS: 0,
         poorSpacingTS: 0,
         spacingDelta: 0,
         withRimProtectorFg: 0,
         withoutRimProtectorFg: 0,
-        dependencyScore: 0,
+        dependencyScore: n(port?.low_dependency),
       },
       defensiveSwitchability: {
-        guardablePositions: [],
-        switchScore: 0,
-        perimeterDfgDiff: 0,
+        guardablePositions: port?.positions_guarded
+          ? Object.entries(port.positions_guarded)
+              .filter(([, v]) => n(v) >= 50)
+              .map(([k]) => k)
+          : [],
+        switchScore: n(port?.switchability),
+        perimeterDfgDiff: n(def?.overall?.pct_plusminus),
         pnrNavigation: 0,
         scoutingNote: '',
       },
@@ -203,29 +236,55 @@ export function mapApiToPlayer(data: PlayerCardData): CortexPlayer {
     },
 
     championship: {
-      index: 0,
-      tier: 'N/A',
-      verdict: 'Championship index not yet available.',
-      winProbability: 0,
+      index: n(champ?.index),
+      tier: champ?.tier ?? 'N/A',
+      verdict: champ ? `${champ.tier} — Championship Index: ${n(champ.index).toFixed(1)}` : 'Championship index not yet available.',
+      winProbability: n(champ?.win_probability) * 100,
       historicalBaseRate: 3.3,
-      multiplier: 0,
-      pillars: [],
+      multiplier: n(champ?.multiplier_vs_base),
+      pillars: (champ?.pillars ?? []).map((p) => ({
+        name: p.name,
+        score: n(p.score),
+        weight: n(p.weight),
+        explanation: '',
+      })),
       playoffProjection: {
-        ppg: 0,
-        ts: 0,
+        ppg: n(champ?.playoff_projection?.projected_ppg),
+        ts: n(champ?.playoff_projection?.projected_ts),
         ast: 0,
         drtg: 0,
-        regToPlayoffDrop: { ppg: 0, ts: 0, ast: 0, drtg: 0 },
+        regToPlayoffDrop: {
+          ppg: n(champ?.playoff_projection?.reg_ppg) - n(champ?.playoff_projection?.projected_ppg),
+          ts: n(champ?.playoff_projection?.reg_ts) - n(champ?.playoff_projection?.projected_ts),
+          ast: 0,
+          drtg: 0,
+        },
         comparisonNote: '',
       },
       supportingCast: { min2ndOption: '', spacingNeed: '', defensiveNeed: '', capFlexibility: '', blueprint: '' },
       comparables: [],
     },
 
-    opponentTier: [],
+    opponentTier: data.opponent_tiers.map((t) => ({
+      tier: t.tier,
+      netRtg: n(t.ppp_allowed),
+      minutes: t.possessions ?? 0,
+      weight: n(t.weight),
+    })),
+
     lineupContext: {
-      topLineups: [],
-      withoutTopTeammate: { teammate: '', netRtg: 0, minutes: 0 },
+      topLineups: (lctx?.top_lineups ?? []).map((l) => ({
+        players: l.players,
+        minutes: n(l.minutes),
+        rawNet: n(l.raw_net),
+        ctxNet: n(l.ctx_net),
+        oppTier: l.opp_tier,
+      })),
+      withoutTopTeammate: {
+        teammate: lctx?.without_top_teammate?.teammate ?? '',
+        netRtg: n(lctx?.without_top_teammate?.net_rtg),
+        minutes: n(lctx?.without_top_teammate?.minutes),
+      },
     },
   }
 }

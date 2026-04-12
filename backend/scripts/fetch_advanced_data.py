@@ -238,7 +238,7 @@ def fetch_and_store_advanced_data(
         rim_def_by_player = {p["CLOSE_DEF_PERSON_ID"]: p for p in rim_defense}
         print(f"  - Fetched rim protection stats for {len(rim_def_by_player)} players")
         logger.info("Fetched rim protection for %d players", len(rim_def_by_player))
-    except (CircuitBreakerError, RateLimitError) as e:
+    except Exception as e:
         print(f"  [ERROR] Failed to fetch rim protection stats: {e}")
         logger.error("Failed to fetch rim protection stats: %s", e)
         rim_def_by_player = {}
@@ -249,7 +249,7 @@ def fetch_and_store_advanced_data(
         three_pt_def_by_player = {p["CLOSE_DEF_PERSON_ID"]: p for p in three_pt_defense}
         print(f"  - Fetched 3PT defensive stats for {len(three_pt_def_by_player)} players")
         logger.info("Fetched 3PT defense for %d players", len(three_pt_def_by_player))
-    except (CircuitBreakerError, RateLimitError) as e:
+    except Exception as e:
         print(f"  [ERROR] Failed to fetch 3PT defensive stats: {e}")
         logger.error("Failed to fetch 3PT defensive stats: %s", e)
         three_pt_def_by_player = {}
@@ -261,7 +261,7 @@ def fetch_and_store_advanced_data(
         iso_def_by_player = {p["PLAYER_ID"]: p for p in iso_defense}
         print(f"  - Fetched isolation defense for {len(iso_def_by_player)} players")
         logger.info("Fetched isolation defense for %d players", len(iso_def_by_player))
-    except (CircuitBreakerError, RateLimitError) as e:
+    except Exception as e:
         print(f"  [ERROR] Failed to fetch isolation defense stats: {e}")
         logger.error("Failed to fetch isolation defense stats: %s", e)
         iso_def_by_player = {}

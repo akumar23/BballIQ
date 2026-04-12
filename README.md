@@ -47,15 +47,42 @@ docker-compose up --build
 
 First run takes 2-3 minutes to build. You'll see logs from all services.
 
-### 3. Fetch NBA Data
+### 3. Populate the Database
 
-Open a **new terminal** and run:
+The easiest way to load all data is the **seed** service, which runs migrations and all 7 fetch phases automatically:
+
+```bash
+docker compose --profile seed run --rm seed
+```
+
+This fetches everything from the NBA API and external sources (~15-20 minutes total due to rate limits). It runs the following phases in order:
+
+1. Traditional + tracking stats (touch, hustle, defensive)
+2. Computed advanced stats (PER, BPM, WS)
+3. Advanced stats + shot zones + clutch + defense
+4. Play type stats (isolation, PnR, spot-up, etc.)
+5. Impact + on/off + lineups
+6. Player matchups
+7. All-in-one metrics (EPM, DARKO, LEBRON, RPM)
+
+**Options:**
+
+```bash
+# Seed a specific season
+docker compose --profile seed run --rm seed python -m scripts.seed_all --season 2023-24
+
+# Run only specific phases
+docker compose --profile seed run --rm seed python -m scripts.seed_all --only phase1 advanced play_types
+
+# Skip migrations (if already applied)
+docker compose --profile seed run --rm seed python -m scripts.seed_all --skip-migrations
+```
+
+**Alternatively**, you can run individual fetch scripts against the running backend:
 
 ```bash
 docker-compose exec backend python -m scripts.fetch_data --create-tables --season 2024-25
 ```
-
-This fetches data from the NBA API (takes 2-3 minutes due to rate limits).
 
 ### 4. Open the App
 
@@ -267,29 +294,41 @@ Save and close the file.
 ```bash
 # Make sure you're in the backend folder with venv activated
 
-# Create the database tables
-python -m scripts.fetch_data --create-tables
+# Run migrations to create all database tables
+alembic upgrade head
 
-# Fetch NBA data (this takes 2-3 minutes due to API rate limits)
+# Seed all data at once (~15-20 minutes total)
+python -m scripts.seed_all --skip-migrations --season 2024-25
+```
+
+This runs all 7 fetch phases in order (traditional stats, computed advanced, shot zones, play types, impact, matchups, and all-in-one metrics).
+
+**To run individual phases instead:**
+
+```bash
+# Phase 1: Traditional + tracking stats
 python -m scripts.fetch_data --season 2024-25
+
+# Phase 2: Computed advanced stats (PER, BPM, WS)
+python -m scripts.fetch_phase2_data --season 2024-25
+
+# Phase 3: Advanced stats, shot zones, clutch, defense
+python -m scripts.fetch_advanced_data --season 2024-25
+
+# Phase 4: Play type stats
+python -m scripts.fetch_play_type_data --season 2024-25
+
+# Phase 5: Impact + on/off + lineups
+python -m scripts.fetch_impact_data --season 2024-25
+
+# Phase 6: Player matchups
+python -m scripts.fetch_matchup_data --season 2024-25
+
+# Phase 7: All-in-one metrics (EPM, DARKO, LEBRON, RPM)
+python -m scripts.fetch_all_in_one_data --season 2024-25
 ```
 
-You should see output like:
-```
-Creating database tables...
-Done.
-Fetching tracking data for season 2024-25...
-  - Fetching traditional stats...
-  - Fetching touch stats...
-  - Fetching hustle stats...
-  - Fetching defensive stats...
-  - Combined data for 450 players
-Processing 450 players...
-Data committed to database.
-Calculating percentiles...
-Percentiles calculated.
-Done!
-```
+> Note: Phase 1 must be run first as other phases depend on players existing in the database.
 
 ### Step 5: Start the Backend Server
 
@@ -386,7 +425,7 @@ docker exec -i nba-stats-db psql -U postgres nba_stats < backup.sql
 
 **Quick data refresh (if you lose data):**
 ```bash
-docker-compose exec backend python -m scripts.fetch_data --create-tables --season 2024-25
+docker compose --profile seed run --rm seed
 ```
 
 ### Optional: Local Directory Storage
@@ -473,9 +512,14 @@ nba-advanced-stats/
 │   │   ├── api/routes/          ← API endpoints
 │   │   └── services/            ← Data fetching & metrics
 │   └── scripts/
-│       ├── fetch_data.py            ← Main data loading script
-│       ├── fetch_impact_data.py     ← Impact/on-off data script
-│       └── fetch_play_type_data.py  ← Play type stats script
+│       ├── seed_all.py              ← Master seed script (runs all phases)
+│       ├── fetch_data.py            ← Phase 1: Traditional + tracking stats
+│       ├── fetch_phase2_data.py     ← Phase 2: PER, BPM, WS
+│       ├── fetch_advanced_data.py   ← Phase 3: Advanced, shot zones, clutch, defense
+│       ├── fetch_play_type_data.py  ← Phase 4: Play type stats
+│       ├── fetch_impact_data.py     ← Phase 5: Impact + on/off + lineups
+│       ├── fetch_matchup_data.py    ← Phase 6: Player matchups
+│       └── fetch_all_in_one_data.py ← Phase 7: All-in-one metrics
 │
 └── frontend/                ← React/TypeScript UI
     ├── Dockerfile
@@ -491,73 +535,56 @@ nba-advanced-stats/
 
 ## Updating Data
 
-To refresh with the latest NBA stats:
+To refresh all data with the latest NBA stats:
 
-**With Docker:**
+**With Docker (recommended):**
 ```bash
-docker-compose exec backend python -m scripts.fetch_data --season 2024-25
+# Re-run the full seed (all 7 phases)
+docker compose --profile seed run --rm seed
+
+# Or refresh specific phases only
+docker compose --profile seed run --rm seed python -m scripts.seed_all --only phase1 advanced --skip-migrations
 ```
 
 **Without Docker:**
 ```bash
 cd backend
 source .venv/bin/activate  # or .venv\Scripts\activate on Windows
-python -m scripts.fetch_data --season 2024-25
+python -m scripts.seed_all --skip-migrations --season 2024-25
+```
+
+**Refresh individual data types:**
+```bash
+# With Docker (use docker-compose exec backend ... or docker exec -it nba-stats-backend ...)
+docker-compose exec backend python -m scripts.fetch_data --season 2024-25           # Traditional + tracking
+docker-compose exec backend python -m scripts.fetch_phase2_data --season 2024-25    # PER, BPM, WS
+docker-compose exec backend python -m scripts.fetch_advanced_data --season 2024-25  # Advanced, shot zones, clutch
+docker-compose exec backend python -m scripts.fetch_play_type_data --season 2024-25 # Play types
+docker-compose exec backend python -m scripts.fetch_impact_data --season 2024-25    # Impact + on/off
+docker-compose exec backend python -m scripts.fetch_matchup_data --season 2024-25   # Matchups
+docker-compose exec backend python -m scripts.fetch_all_in_one_data --season 2024-25 # EPM, DARKO, LEBRON, RPM
 ```
 
 ### Fetching Historical Seasons
 
-You can backfill multiple seasons at once using `--from-season` or `--seasons`. Both `fetch_data.py` and `fetch_advanced_data.py` support these flags.
+Several scripts support `--from-season` and `--seasons` flags for backfilling:
 
-**Fetch all seasons from a start year up to the current season:**
 ```bash
-# Docker
-docker-compose exec backend python -m scripts.fetch_data --from-season 2020-21
-
-# Local
+# Fetch all seasons from 2020-21 to current
 python -m scripts.fetch_data --from-season 2020-21
-```
-This fetches 2020-21, 2021-22, 2022-23, 2023-24, and 2024-25 in order.
 
-**Specify a custom end season:**
-```bash
+# Specify a custom end season
 python -m scripts.fetch_data --from-season 2018-19 --season 2022-23
-```
 
-**Fetch an explicit list of seasons:**
-```bash
+# Fetch an explicit list of seasons
 python -m scripts.fetch_data --seasons 2022-23 2023-24 2024-25
-```
 
-**Same flags work for advanced data:**
-```bash
+# Same flags work for advanced data
 python -m scripts.fetch_advanced_data --from-season 2020-21
-python -m scripts.fetch_advanced_data --seasons 2022-23 2023-24 2024-25
 ```
 
 > Note: NBA tracking stats (touch, hustle, defensive) are available from 2013-14 onward.
-> Each season takes ~2-3 minutes to fetch due to API rate limits.
-
-To refresh with latest Impact Data:
-
-**With Docker**
-```bash
-docker exec -it nba-stats-backend python -m scripts.fetch_impact_data
-```
-
-To refresh with latest Play Type Data (Isolation, PnR, Spot-up, etc.):
-
-**With Docker**
-```bash
-docker exec -it nba-stats-backend python -m scripts.fetch_play_type_data
-```
-
-**Without Docker:**
-```bash
-cd backend
-source .venv/bin/activate  # or .venv\Scripts\activate on Windows
-python -m scripts.fetch_play_type_data --season 2024-25
-```
+> Each season takes ~2-3 minutes to fetch per script due to API rate limits.
 
 ---
 
