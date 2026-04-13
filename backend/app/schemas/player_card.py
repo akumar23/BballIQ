@@ -171,15 +171,18 @@ class CardAllInOne(BaseModel):
     epm: Decimal | None = None
     epm_offense: Decimal | None = None
     epm_defense: Decimal | None = None
-    raptor: Decimal | None = None
-    raptor_offense: Decimal | None = None
-    raptor_defense: Decimal | None = None
     lebron: Decimal | None = None
     lebron_offense: Decimal | None = None
     lebron_defense: Decimal | None = None
     darko: Decimal | None = None
     darko_offense: Decimal | None = None
     darko_defense: Decimal | None = None
+    laker: Decimal | None = None
+    laker_offense: Decimal | None = None
+    laker_defense: Decimal | None = None
+    mamba: Decimal | None = None
+    mamba_offense: Decimal | None = None
+    mamba_defense: Decimal | None = None
 
 
 class CardMatchup(BaseModel):

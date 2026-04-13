@@ -30,3 +30,5 @@ class Player(Base):
     shooting_tracking = relationship("PlayerShootingTracking", back_populates="player")
     matchups = relationship("PlayerMatchups", back_populates="player")
     all_in_one_metrics = relationship("PlayerAllInOneMetrics", back_populates="player")
+    rapm_windows = relationship("PlayerRapmWindows", back_populates="player")
+    big_board = relationship("PlayerBigBoard", back_populates="player")
