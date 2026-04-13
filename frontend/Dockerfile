@@ -14,7 +14,9 @@ RUN npm install
 # Copy source code
 COPY . .
 
-# Build the application
+# Build the application (BASE_PATH defaults to / for root serving)
+ARG BASE_PATH=/
+ENV BASE_PATH=${BASE_PATH}
 RUN npm run build
 
 # Production stage
