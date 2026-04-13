@@ -560,9 +560,10 @@ async def get_player_card(
             rapm=all_in_one_row.rapm, rapm_offense=all_in_one_row.rapm_offense, rapm_defense=all_in_one_row.rapm_defense,
             rpm=all_in_one_row.rpm, rpm_offense=all_in_one_row.rpm_offense, rpm_defense=all_in_one_row.rpm_defense,
             epm=all_in_one_row.epm, epm_offense=all_in_one_row.epm_offense, epm_defense=all_in_one_row.epm_defense,
-            raptor=all_in_one_row.raptor, raptor_offense=all_in_one_row.raptor_offense, raptor_defense=all_in_one_row.raptor_defense,
             lebron=all_in_one_row.lebron, lebron_offense=all_in_one_row.lebron_offense, lebron_defense=all_in_one_row.lebron_defense,
             darko=all_in_one_row.darko, darko_offense=all_in_one_row.darko_offense, darko_defense=all_in_one_row.darko_defense,
+            laker=all_in_one_row.laker, laker_offense=all_in_one_row.laker_offense, laker_defense=all_in_one_row.laker_defense,
+            mamba=all_in_one_row.mamba, mamba_offense=all_in_one_row.mamba_offense, mamba_defense=all_in_one_row.mamba_defense,
         )
 
     # ------ New data: matchup log (top 5) ------

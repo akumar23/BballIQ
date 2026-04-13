@@ -48,7 +48,7 @@ def main():
     parser.add_argument(
         "--only",
         nargs="+",
-        choices=["phase1", "phase2", "advanced", "play_types", "impact", "matchups", "all_in_one"],
+        choices=["phase1", "phase2", "advanced", "play_types", "impact", "matchups", "all_in_one", "nbarapm"],
         help="Run only specific fetch phases",
     )
     args = parser.parse_args()
@@ -88,6 +88,9 @@ def main():
         ]),
         ("all_in_one", "Phase 7: All-In-One Metrics (EPM, DARKO, LEBRON, RPM)", [
             sys.executable, "-m", "scripts.fetch_all_in_one_data", "--season", season,
+        ]),
+        ("nbarapm", "Phase 8: nbarapm.com (RAPM Windows, Big Board, Six Factor, Peak, RAPTOR, MAMBA, rFTOV)", [
+            sys.executable, "-m", "scripts.fetch_nbarapm_data", "--season", season,
         ]),
     ]
 

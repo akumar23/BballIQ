@@ -15,6 +15,14 @@ from app.models.career_stats import PlayerCareerStats
 from app.models.shooting_tracking import PlayerShootingTracking
 from app.models.player_matchups import PlayerMatchups
 from app.models.all_in_one_metrics import PlayerAllInOneMetrics
+from app.models.rapm_windows import PlayerRapmWindows
+from app.models.big_board import PlayerBigBoard
+from app.models.six_factor_rapm import SixFactorRapm
+from app.models.peak_rapm import PeakRapm
+from app.models.raptor_history import RaptorHistory
+from app.models.mamba_history import MambaHistory
+from app.models.darko_history import DarkoHistory
+from app.models.forced_turnovers import ForcedTurnovers
 
 __all__ = [
     "Player",
@@ -34,4 +42,12 @@ __all__ = [
     "PlayerShootingTracking",
     "PlayerMatchups",
     "PlayerAllInOneMetrics",
+    "PlayerRapmWindows",
+    "PlayerBigBoard",
+    "SixFactorRapm",
+    "PeakRapm",
+    "RaptorHistory",
+    "MambaHistory",
+    "DarkoHistory",
+    "ForcedTurnovers",
 ]

@@ -1,7 +1,7 @@
 """All-in-one impact metrics model.
 
 Stores aggregated all-in-one player evaluation metrics from multiple
-external sources: RAPM, RPM, EPM, RAPTOR, LEBRON, and DARKO.
+external sources: RAPM, RPM, EPM, LEBRON, DARKO, LAKER, and MAMBA.
 Each metric includes overall, offensive, and defensive splits where available.
 """
 
@@ -17,12 +17,13 @@ class PlayerAllInOneMetrics(Base):
     """All-in-one impact metrics for a player's season.
 
     Aggregates metrics from multiple sources:
-    - RAPM: Self-computed via ridge regression on play-by-play data
-    - RPM: ESPN's Real Plus-Minus (scraped)
-    - EPM: Dunks & Threes Estimated Plus-Minus (scraped)
-    - RAPTOR: FiveThirtyEight (historical only, discontinued)
-    - LEBRON: BBall Index (scraped)
-    - DARKO: The Athletic's DPM (CSV download)
+    - RAPM: Timedecay RAPM from nbarapm.com
+    - RPM/xRAPM: xrapm.com (original RPM by Jeremias Engelmann)
+    - EPM: Dunks & Threes Estimated Plus-Minus
+    - LEBRON: BBall Index (via nbarapm.com)
+    - DARKO: DPM from darko.app
+    - LAKER: BPM-style metric from nbarapm.com
+    - MAMBA: Timothy Wijaya's hybrid metric from nbarapm.com
     """
 
     __tablename__ = "player_all_in_one_metrics"
@@ -48,11 +49,6 @@ class PlayerAllInOneMetrics(Base):
     epm_offense: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
     epm_defense: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
 
-    # RAPTOR — FiveThirtyEight (historical/estimated)
-    raptor: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
-    raptor_offense: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
-    raptor_defense: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
-
     # LEBRON — BBall Index
     lebron: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
     lebron_offense: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
@@ -62,6 +58,16 @@ class PlayerAllInOneMetrics(Base):
     darko: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
     darko_offense: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
     darko_defense: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+
+    # LAKER — BPM-style all-in-one metric (from nbarapm.com)
+    laker: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    laker_offense: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    laker_defense: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+
+    # MAMBA — Timothy Wijaya's hybrid metric
+    mamba: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    mamba_offense: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    mamba_defense: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
 
     # Source tracking — which sources were successfully fetched
     data_sources: Mapped[str | None] = mapped_column(
