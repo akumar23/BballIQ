@@ -89,7 +89,7 @@ def get_qualifying_players(
         .join(SeasonStats, SeasonStats.player_id == Player.id)
         .filter(
             SeasonStats.season == season,
-            SeasonStats.minutes >= min_minutes,
+            SeasonStats.total_minutes >= min_minutes,
             Player.active.is_(True),
         )
         .all()

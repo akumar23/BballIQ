@@ -1,19 +1,20 @@
 """Service for scraping all-in-one impact metrics from external sources.
 
 Fetches player impact metrics from:
-- EPM (Estimated Plus-Minus) from dunksandthrees.com
-- DARKO DPM from darko.app (CSV export)
-- LEBRON from bball-index.com
-- RPM (Real Plus-Minus) from ESPN
+- EPM (Estimated Plus-Minus) from dunksandthrees.com via SvelteKit __data.json
+- DARKO DPM from darko.app via SvelteKit __data.json
+- LEBRON from bball-index.com (JS-rendered; currently unavailable without browser)
+- RPM/xRAPM from xrapm.com (original RPM metric by Jeremias Engelmann)
 
 Each scraper returns a list of dicts with player_name and metric values,
 which are then fuzzy-matched to NBA player IDs for storage.
 """
 
-import io
+import json
 import logging
 import re
 import time
+import unicodedata
 from dataclasses import dataclass, field
 from decimal import Decimal
 
@@ -81,6 +82,16 @@ def _normalize_name(name: str) -> str:
     return name
 
 
+def _to_ascii(name: str) -> str:
+    """Transliterate Unicode characters to ASCII equivalents.
+
+    Converts diacritical characters like ć, č, ņ, ģ to their base letters.
+    E.g., 'Jokić' -> 'Jokic', 'Porziņģis' -> 'Porzingis'
+    """
+    nfkd = unicodedata.normalize("NFKD", name)
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+
 def _clean_header(text: str) -> str:
     """Clean a table header by removing sort arrows and special characters."""
     # Remove common sort indicator characters
@@ -88,6 +99,242 @@ def _clean_header(text: str) -> str:
     # Remove non-ASCII
     text = text.encode("ascii", errors="ignore").decode()
     return text.strip().upper()
+
+
+def _parse_sveltekit_ndjson(response_text: str) -> list[dict]:
+    """Parse a SvelteKit newline-delimited JSON response.
+
+    SvelteKit __data.json endpoints return NDJSON (newline-delimited JSON)
+    where the first line is the main data and subsequent lines are deferred
+    chunks that resolve Promise placeholders in the main data.
+
+    Args:
+        response_text: Raw response body text
+
+    Returns:
+        List of parsed JSON objects (one per line)
+    """
+    results = []
+    for line in response_text.strip().split("\n"):
+        line = line.strip()
+        if line:
+            results.append(json.loads(line))
+    return results
+
+
+def _extract_sveltekit_players(
+    data_array: list,
+    pointer_array: list[int],
+    name_field: str,
+    overall_field: str,
+    offense_field: str,
+    defense_field: str,
+) -> list[AllInOnePlayerData]:
+    """Extract player records from a SvelteKit __data.json flat data array.
+
+    SvelteKit serializes data using a flat array with per-record field maps.
+    Each entry in the pointer_array points to a dict in data_array that maps
+    field names to absolute indices within data_array where the values live.
+
+    This deduplication strategy means shared values (like season=2026) appear
+    once in the array and multiple records reference the same index.
+
+    Example structure:
+        data_array[pointer[0]] = {"player_name": 6, "tot": 16, ...}
+        data_array[6] = "Victor Wembanyama"
+        data_array[16] = 8.79
+
+        data_array[pointer[1]] = {"player_name": 89, "tot": 98, ...}
+        data_array[89] = "Shai Gilgeous-Alexander"
+        data_array[98] = 8.36
+
+    Args:
+        data_array: The flat data list from a SvelteKit node
+        pointer_array: List of indices pointing to per-record field maps
+        name_field: Key name for player name in the field maps
+        overall_field: Key name for overall metric value
+        offense_field: Key name for offensive metric value
+        defense_field: Key name for defensive metric value
+
+    Returns:
+        List of AllInOnePlayerData instances
+    """
+    players = []
+
+    for ptr in pointer_array:
+        try:
+            if ptr >= len(data_array):
+                continue
+
+            record_map = data_array[ptr]
+            if not isinstance(record_map, dict):
+                continue
+
+            # Get the absolute index for each field from the per-record map
+            name_idx = record_map.get(name_field)
+            if name_idx is None or name_idx >= len(data_array):
+                continue
+
+            name_val = data_array[name_idx]
+            if not isinstance(name_val, str) or not name_val:
+                continue
+
+            # Extract metric values
+            overall_val = None
+            overall_idx = record_map.get(overall_field)
+            if overall_idx is not None and overall_idx < len(data_array):
+                overall_val = data_array[overall_idx]
+
+            offense_val = None
+            offense_idx = record_map.get(offense_field)
+            if offense_idx is not None and offense_idx < len(data_array):
+                offense_val = data_array[offense_idx]
+
+            defense_val = None
+            defense_idx = record_map.get(defense_field)
+            if defense_idx is not None and defense_idx < len(data_array):
+                defense_val = data_array[defense_idx]
+
+            player = AllInOnePlayerData(
+                player_name=_normalize_name(name_val),
+                overall=_safe_decimal(overall_val),
+                offense=_safe_decimal(offense_val),
+                defense=_safe_decimal(defense_val),
+            )
+            players.append(player)
+
+        except (IndexError, KeyError, TypeError) as e:
+            logger.debug("Skipping record at pointer %d: %s", ptr, e)
+            continue
+
+    return players
+
+
+def _find_sveltekit_stats_node(
+    ndjson_objects: list[dict],
+    identifier_field: str,
+) -> tuple[list | None, list[int] | None]:
+    """Find the SvelteKit data node containing player statistics.
+
+    Searches through both the main data object and deferred chunks for
+    a node whose data array contains a field map with the given identifier.
+
+    Args:
+        ndjson_objects: Parsed NDJSON objects from the response
+        identifier_field: A field name that identifies the stats field map
+                         (e.g., 'player_name')
+
+    Returns:
+        Tuple of (data_array, pointer_array) or (None, None) if not found
+    """
+    for obj in ndjson_objects:
+        obj_type = obj.get("type")
+
+        if obj_type == "data":
+            # Main data object - search through nodes
+            for node in obj.get("nodes", []):
+                if node is None or not isinstance(node, dict):
+                    continue
+                if node.get("type") != "data":
+                    continue
+
+                data_array = node.get("data", [])
+                result = _find_stats_in_data_array(data_array, identifier_field)
+                if result is not None:
+                    return data_array, result
+
+        elif obj_type == "chunk":
+            # Deferred chunk - search its data array directly
+            data_array = obj.get("data", [])
+            result = _find_stats_in_data_array(data_array, identifier_field)
+            if result is not None:
+                return data_array, result
+
+    return None, None
+
+
+def _find_stats_in_data_array(
+    data_array: list,
+    identifier_field: str,
+) -> list[int] | None:
+    """Find the pointer array for stats records within a data array.
+
+    Looks for a list of monotonically increasing integers (the pointer array)
+    immediately followed by or associated with a dict containing the identifier
+    field (the field map for the first record).
+
+    Args:
+        data_array: The flat data list to search
+        identifier_field: Field name to identify the correct field map
+
+    Returns:
+        The pointer array if found, None otherwise
+    """
+    if not data_array or not isinstance(data_array, list):
+        return None
+
+    # Strategy: look for the top-level structure dict that has a 'stats' key
+    # pointing to the pointer array, or find the pointer array directly
+    for i, item in enumerate(data_array):
+        if not isinstance(item, dict):
+            continue
+
+        # Check if this dict references a 'stats' field pointing to a list index
+        stats_idx = item.get("stats")
+        if stats_idx is not None and isinstance(stats_idx, int):
+            if stats_idx < len(data_array) and isinstance(data_array[stats_idx], list):
+                candidate = data_array[stats_idx]
+                if _is_pointer_array(candidate, data_array, identifier_field):
+                    return candidate
+
+        # Check if this dict references a 'players' field pointing to a list index
+        players_idx = item.get("players")
+        if players_idx is not None and isinstance(players_idx, int):
+            if players_idx < len(data_array) and isinstance(
+                data_array[players_idx], list
+            ):
+                candidate = data_array[players_idx]
+                if _is_pointer_array(candidate, data_array, identifier_field):
+                    return candidate
+
+    # Fallback: scan for any list of integers that looks like a pointer array
+    for i, item in enumerate(data_array):
+        if isinstance(item, list) and len(item) > 10:
+            if _is_pointer_array(item, data_array, identifier_field):
+                return item
+
+    return None
+
+
+def _is_pointer_array(
+    candidate: list,
+    data_array: list,
+    identifier_field: str,
+) -> bool:
+    """Check if a candidate list is a valid pointer array.
+
+    A valid pointer array contains integers that point to per-record field
+    map dicts in the data_array, where at least the first pointed-to dict
+    contains the identifier_field key.
+
+    Args:
+        candidate: List to check
+        data_array: The containing data array
+        identifier_field: Expected field name in the pointed-to dicts
+
+    Returns:
+        True if this is a valid pointer array
+    """
+    if not candidate or not all(isinstance(x, int) for x in candidate[:5]):
+        return False
+
+    # Check that the first pointer leads to a dict with the identifier field
+    first_ptr = candidate[0]
+    if first_ptr >= len(data_array):
+        return False
+
+    target = data_array[first_ptr]
+    return isinstance(target, dict) and identifier_field in target
 
 
 class AllInOneMetricsScraper:
@@ -157,305 +404,143 @@ class AllInOneMetricsScraper:
 
         return results
 
-    def fetch_epm(self) -> ScraperResult:
-        """Fetch EPM data from dunksandthrees.com.
+    def _fetch_sveltekit_data(self, url: str) -> list[dict]:
+        """Fetch and parse a SvelteKit __data.json endpoint.
 
-        EPM page renders a sortable table with columns including
-        player name, O-EPM, D-EPM, and EPM (total).
+        Args:
+            url: The __data.json URL to fetch
+
+        Returns:
+            List of parsed NDJSON objects
+
+        Raises:
+            httpx.HTTPError: On HTTP errors
+            json.JSONDecodeError: On invalid JSON
+        """
+        response = self._client.get(
+            url,
+            headers={
+                **BROWSER_HEADERS,
+                "Accept": "application/json",
+            },
+        )
+        response.raise_for_status()
+        return _parse_sveltekit_ndjson(response.text)
+
+    def fetch_epm(self) -> ScraperResult:
+        """Fetch EPM data from dunksandthrees.com via SvelteKit data endpoint.
+
+        dunksandthrees.com is a SvelteKit app. The __data.json endpoint returns
+        player data in SvelteKit's compressed indexed format without needing
+        JavaScript rendering.
+
+        The response is NDJSON with the main data in the first line's node[2]
+        containing fields: player_name, off (O-EPM), def (D-EPM), tot (total EPM).
         """
         result = ScraperResult(source="EPM")
 
         try:
-            response = self._client.get("https://dunksandthrees.com/epm")
-            response.raise_for_status()
+            ndjson = self._fetch_sveltekit_data(
+                "https://dunksandthrees.com/epm/__data.json"
+            )
 
-            soup = BeautifulSoup(response.text, "lxml")
+            data_array, pointer_array = _find_sveltekit_stats_node(
+                ndjson, "player_name"
+            )
 
-            # Look for the data table — try multiple approaches
-            table = soup.find("table")
-            if not table:
-                # EPM may be JS-rendered. Try to find JSON data in script tags.
-                import json as _json
-                for script in soup.find_all("script"):
-                    text = script.get_text()
-                    # Look for player data arrays
-                    for pattern in [
-                        r'"players"\s*:\s*(\[.*?\])',
-                        r'"data"\s*:\s*(\[.*?\])',
-                        r'__NEXT_DATA__.*?"players"\s*:\s*(\[.*?\])',
-                    ]:
-                        match = re.search(pattern, text, re.DOTALL)
-                        if match:
-                            try:
-                                data = _json.loads(match.group(1))
-                                for item in data:
-                                    name = item.get("name") or item.get("player", "")
-                                    if not name:
-                                        continue
-                                    player = AllInOnePlayerData(
-                                        player_name=_normalize_name(name),
-                                        overall=_safe_decimal(item.get("epm") or item.get("EPM")),
-                                        offense=_safe_decimal(item.get("o_epm") or item.get("O-EPM")),
-                                        defense=_safe_decimal(item.get("d_epm") or item.get("D-EPM")),
-                                    )
-                                    result.players.append(player)
-                            except _json.JSONDecodeError:
-                                pass
-                if result.players:
-                    result.success = True
-                    return result
-                result.error = "No table found on EPM page (site may require JavaScript)"
-                return result
-
-            # Parse headers
-            headers = []
-            thead = table.find("thead")
-            if thead:
-                for th in thead.find_all("th"):
-                    headers.append(_clean_header(th.get_text(strip=True)))
-
-            # Find column indices
-            name_idx = None
-            epm_idx = None
-            oepm_idx = None
-            depm_idx = None
-
-            for i, h in enumerate(headers):
-                if h in ("PLAYER", "NAME"):
-                    name_idx = i
-                elif h == "EPM":
-                    epm_idx = i
-                elif h in ("O-EPM", "OEPM", "OFF. EPM", "OFF"):
-                    oepm_idx = i
-                elif h in ("D-EPM", "DEPM", "DEF. EPM", "DEF"):
-                    depm_idx = i
-
-            if name_idx is None or epm_idx is None:
-                # Try alternate parsing: look for all th/td in rows
-                result.error = f"Could not identify columns. Headers: {headers}"
-                return result
-
-            # Parse rows
-            tbody = table.find("tbody")
-            rows = tbody.find_all("tr") if tbody else table.find_all("tr")[1:]
-
-            for row in rows:
-                cells = row.find_all(["td", "th"])
-                if len(cells) <= max(
-                    filter(None, [name_idx, epm_idx, oepm_idx, depm_idx])
-                ):
-                    continue
-
-                name = cells[name_idx].get_text(strip=True)
-                if not name:
-                    continue
-
-                player = AllInOnePlayerData(
-                    player_name=_normalize_name(name),
-                    overall=_safe_decimal(cells[epm_idx].get_text(strip=True)),
-                    offense=(
-                        _safe_decimal(cells[oepm_idx].get_text(strip=True))
-                        if oepm_idx is not None
-                        else None
-                    ),
-                    defense=(
-                        _safe_decimal(cells[depm_idx].get_text(strip=True))
-                        if depm_idx is not None
-                        else None
-                    ),
+            if data_array is None or pointer_array is None:
+                result.error = (
+                    "Could not find player stats node in EPM __data.json. "
+                    "The SvelteKit data format may have changed."
                 )
-                result.players.append(player)
+                return result
 
-            result.success = len(result.players) > 0
-            if not result.success:
-                result.error = "No player rows parsed from EPM table"
+            players = _extract_sveltekit_players(
+                data_array=data_array,
+                pointer_array=pointer_array,
+                name_field="player_name",
+                overall_field="tot",
+                offense_field="off",
+                defense_field="def",
+            )
+
+            if players:
+                result.players = players
+                result.success = True
+            else:
+                result.error = "Parsed EPM __data.json but extracted 0 players"
 
         except httpx.HTTPError as e:
-            result.error = f"HTTP error: {e}"
+            result.error = f"HTTP error fetching EPM __data.json: {e}"
+        except json.JSONDecodeError as e:
+            result.error = f"Invalid JSON from EPM __data.json: {e}"
         except Exception as e:
-            result.error = f"Parse error: {e}"
+            result.error = f"Error parsing EPM data: {e}"
 
         return result
 
     def fetch_darko(self) -> ScraperResult:
-        """Fetch DARKO DPM data from darko.app.
+        """Fetch DARKO DPM data from darko.app via SvelteKit data endpoint.
 
-        The leaderboard page has a CSV download button. We try to find
-        the CSV export URL or parse the page directly.
+        darko.app is a SvelteKit app. The __data.json endpoint returns player
+        data with DPM (Daily Plus-Minus) metrics in the same compressed format.
+
+        Fields: player_name, dpm (total), o_dpm (offensive), d_dpm (defensive).
         """
         result = ScraperResult(source="DARKO")
 
         try:
-            # First try the main page to find data
-            response = self._client.get("https://darko.app/")
-            response.raise_for_status()
+            ndjson = self._fetch_sveltekit_data(
+                "https://darko.app/__data.json"
+            )
 
-            soup = BeautifulSoup(response.text, "lxml")
+            data_array, pointer_array = _find_sveltekit_stats_node(
+                ndjson, "player_name"
+            )
 
-            # Look for a table with DPM data
-            table = soup.find("table")
-            if table:
-                return self._parse_darko_table(table, result)
+            if data_array is None or pointer_array is None:
+                result.error = (
+                    "Could not find player stats node in DARKO __data.json. "
+                    "The SvelteKit data format may have changed."
+                )
+                return result
 
-            # If no table, try to find embedded JSON or CSV link
-            # Look for CSV download links
-            csv_links = soup.find_all("a", href=re.compile(r"\.csv", re.IGNORECASE))
-            if csv_links:
-                csv_url = csv_links[0].get("href")
-                if csv_url and not csv_url.startswith("http"):
-                    csv_url = f"https://darko.app{csv_url}"
+            players = _extract_sveltekit_players(
+                data_array=data_array,
+                pointer_array=pointer_array,
+                name_field="player_name",
+                overall_field="dpm",
+                offense_field="o_dpm",
+                defense_field="d_dpm",
+            )
 
-                csv_response = self._client.get(csv_url)
-                csv_response.raise_for_status()
-
-                df = pd.read_csv(io.StringIO(csv_response.text))
-                return self._parse_darko_csv(df, result)
-
-            # Try finding data in script tags (React/Next.js apps often embed data)
-            scripts = soup.find_all("script")
-            for script in scripts:
-                text = script.get_text()
-                if "DPM" in text and "player" in text.lower():
-                    # Try to extract JSON data
-                    json_match = re.search(
-                        r'\[{.*?"(?:name|player)".*?}.*?\]', text, re.DOTALL
-                    )
-                    if json_match:
-                        import json
-
-                        try:
-                            data = json.loads(json_match.group())
-                            for item in data:
-                                name = item.get("name") or item.get("player", "")
-                                if not name:
-                                    continue
-                                player = AllInOnePlayerData(
-                                    player_name=_normalize_name(name),
-                                    overall=_safe_decimal(
-                                        item.get("dpm") or item.get("DPM")
-                                    ),
-                                    offense=_safe_decimal(
-                                        item.get("o_dpm") or item.get("O-DPM")
-                                    ),
-                                    defense=_safe_decimal(
-                                        item.get("d_dpm") or item.get("D-DPM")
-                                    ),
-                                )
-                                result.players.append(player)
-                        except json.JSONDecodeError:
-                            pass
-
-            if not result.players:
-                result.error = "Could not find DARKO data on page"
-            else:
+            if players:
+                result.players = players
                 result.success = True
+            else:
+                result.error = "Parsed DARKO __data.json but extracted 0 players"
 
         except httpx.HTTPError as e:
-            result.error = f"HTTP error: {e}"
+            result.error = f"HTTP error fetching DARKO __data.json: {e}"
+        except json.JSONDecodeError as e:
+            result.error = f"Invalid JSON from DARKO __data.json: {e}"
         except Exception as e:
-            result.error = f"Error: {e}"
+            result.error = f"Error parsing DARKO data: {e}"
 
-        return result
-
-    def _parse_darko_table(
-        self, table: BeautifulSoup, result: ScraperResult
-    ) -> ScraperResult:
-        """Parse a DARKO HTML table."""
-        headers = []
-        thead = table.find("thead")
-        if thead:
-            for th in thead.find_all("th"):
-                headers.append(_clean_header(th.get_text(strip=True)))
-
-        name_idx = None
-        dpm_idx = None
-        odpm_idx = None
-        ddpm_idx = None
-
-        for i, h in enumerate(headers):
-            if h in ("PLAYER", "NAME"):
-                name_idx = i
-            elif h in ("DPM", "TOTAL DPM", "TOTAL"):
-                dpm_idx = i
-            elif h in ("O-DPM", "ODPM", "OFF DPM", "OFF"):
-                odpm_idx = i
-            elif h in ("D-DPM", "DDPM", "DEF DPM", "DEF"):
-                ddpm_idx = i
-
-        if name_idx is None or dpm_idx is None:
-            result.error = f"Could not identify DARKO columns. Headers: {headers}"
-            return result
-
-        tbody = table.find("tbody")
-        rows = tbody.find_all("tr") if tbody else table.find_all("tr")[1:]
-
-        for row in rows:
-            cells = row.find_all(["td", "th"])
-            if len(cells) <= max(
-                filter(None, [name_idx, dpm_idx, odpm_idx, ddpm_idx])
-            ):
-                continue
-
-            name = cells[name_idx].get_text(strip=True)
-            if not name:
-                continue
-
-            player = AllInOnePlayerData(
-                player_name=_normalize_name(name),
-                overall=_safe_decimal(cells[dpm_idx].get_text(strip=True)),
-                offense=(
-                    _safe_decimal(cells[odpm_idx].get_text(strip=True))
-                    if odpm_idx is not None
-                    else None
-                ),
-                defense=(
-                    _safe_decimal(cells[ddpm_idx].get_text(strip=True))
-                    if ddpm_idx is not None
-                    else None
-                ),
-            )
-            result.players.append(player)
-
-        result.success = len(result.players) > 0
-        return result
-
-    def _parse_darko_csv(
-        self, df: pd.DataFrame, result: ScraperResult
-    ) -> ScraperResult:
-        """Parse a DARKO CSV DataFrame."""
-        # Normalize column names
-        col_map = {c.upper().strip(): c for c in df.columns}
-
-        name_col = col_map.get("PLAYER") or col_map.get("NAME")
-        dpm_col = col_map.get("DPM") or col_map.get("TOTAL DPM")
-        odpm_col = col_map.get("O-DPM") or col_map.get("ODPM")
-        ddpm_col = col_map.get("D-DPM") or col_map.get("DDPM")
-
-        if not name_col or not dpm_col:
-            result.error = f"Could not identify DARKO CSV columns: {list(df.columns)}"
-            return result
-
-        for _, row in df.iterrows():
-            name = str(row[name_col]).strip()
-            if not name or name == "nan":
-                continue
-
-            player = AllInOnePlayerData(
-                player_name=_normalize_name(name),
-                overall=_safe_decimal(row.get(dpm_col)),
-                offense=_safe_decimal(row.get(odpm_col)) if odpm_col else None,
-                defense=_safe_decimal(row.get(ddpm_col)) if ddpm_col else None,
-            )
-            result.players.append(player)
-
-        result.success = len(result.players) > 0
         return result
 
     def fetch_lebron(self) -> ScraperResult:
         """Fetch LEBRON data from bball-index.com.
 
-        The LEBRON database page shows a table/dashboard with player
-        LEBRON values including offensive and defensive components.
+        The LEBRON dashboard is JavaScript-rendered with no accessible public API
+        or data endpoint. The data is loaded dynamically via a JS application
+        that cannot be accessed through simple HTTP requests.
+
+        This scraper attempts to find server-rendered data but will likely fail.
+        To obtain LEBRON data, consider:
+        - Using a headless browser (Playwright/Selenium) to render the JS
+        - Contacting BBall Index for API access
+        - Manually downloading data from their interactive tools
         """
         result = ScraperResult(source="LEBRON")
 
@@ -467,7 +552,7 @@ class AllInOneMetricsScraper:
 
             soup = BeautifulSoup(response.text, "lxml")
 
-            # Look for tables
+            # Check for HTML tables (in case they add server-rendered data)
             table = soup.find("table")
             if table:
                 headers = []
@@ -533,19 +618,23 @@ class AllInOneMetricsScraper:
                         )
                         result.players.append(player)
 
-            # If no table found, check for Tableau embeds or iframes
+            # Check for Google Sheets embeds (inline-google-spreadsheet-viewer plugin)
             if not result.players:
-                iframes = soup.find_all("iframe")
-                if iframes:
-                    result.error = (
-                        "LEBRON data is in an embedded dashboard (iframe/Tableau). "
-                        "Manual scraping not supported. Consider using the BBall Index API."
+                igsv_tables = soup.find_all(class_="igsv-table")
+                if igsv_tables:
+                    logger.info(
+                        "Found igsv-table elements; data may be in Google Sheets embed"
                     )
-                else:
-                    result.error = "No LEBRON data table found on page"
-                return result
 
-            result.success = len(result.players) > 0
+            if result.players:
+                result.success = True
+            else:
+                result.error = (
+                    "LEBRON data is rendered via JavaScript and cannot be scraped "
+                    "with static HTTP requests. The bball-index.com dashboard "
+                    "requires a headless browser (Playwright/Selenium) or direct "
+                    "API access from BBall Index."
+                )
 
         except httpx.HTTPError as e:
             result.error = f"HTTP error: {e}"
@@ -555,122 +644,179 @@ class AllInOneMetricsScraper:
         return result
 
     def fetch_rpm(self) -> ScraperResult:
-        """Fetch RPM data from ESPN.
+        """Fetch xRAPM data from xrapm.com as a replacement for ESPN RPM.
 
-        ESPN's RPM page renders server-side with paginated player data.
-        We iterate through pages to collect all players.
+        ESPN has removed RPM from their website. The original RPM creator,
+        Jeremias Engelmann, publishes the metric under its original name
+        xRAPM (Expected Regularized Adjusted Plus-Minus) at xrapm.com.
+
+        The page contains a single HTML table (id="sortableTable") with all
+        ~650 NBA players. Values include percentile rankings in parentheses
+        (e.g., "7.2 (99)").
+
+        Note: The xRAPM HTML is malformed - tbody rows lack opening <tr> tags,
+        causing standard row-based parsers to fail. We parse by collecting all
+        <td> elements from tbody and grouping them by the known column count.
         """
         result = ScraperResult(source="RPM")
 
         try:
-            page = 1
-            max_pages = 15  # ~450 players / 50 per page
+            response = self._client.get("https://xrapm.com")
+            response.raise_for_status()
 
-            while page <= max_pages:
-                url = f"https://www.espn.com/nba/statistics/rpm/_/page/{page}"
-                response = self._client.get(url)
-                response.raise_for_status()
+            # Use html.parser (not lxml) because the HTML is malformed:
+            # rows in tbody lack opening <tr> tags, and lxml drops them.
+            soup = BeautifulSoup(response.text, "html.parser")
 
-                soup = BeautifulSoup(response.text, "lxml")
-
-                # Find the stats table
+            table = soup.find("table", {"id": "sortableTable"})
+            if not table:
+                table = soup.find("table", {"class": "table1"})
+            if not table:
                 table = soup.find("table")
-                if not table:
-                    break
 
-                # Parse headers on first page
-                if page == 1:
-                    headers = []
-                    thead = table.find("thead")
-                    if thead:
-                        for th in thead.find_all("th"):
-                            headers.append(th.get_text(strip=True).upper())
+            if not table:
+                result.error = (
+                    "No table found on xrapm.com. "
+                    "Site structure may have changed."
+                )
+                return result
 
-                tbody = table.find("tbody")
-                rows = tbody.find_all("tr") if tbody else table.find_all("tr")[1:]
+            # Parse headers to determine column count and positions
+            headers = []
+            thead = table.find("thead")
+            if thead:
+                for th in thead.find_all("th"):
+                    headers.append(_clean_header(th.get_text(strip=True)))
 
-                if not rows:
-                    break
+            # Determine column indices
+            # Expected: Player, Team, Offense, Defense(*), Total
+            num_cols = len(headers) if headers else 5
+            name_idx = 0
+            offense_idx = 2
+            defense_idx = 3
+            total_idx = 4
 
-                rows_found = 0
+            for i, h in enumerate(headers):
+                if h in ("PLAYER", "NAME"):
+                    name_idx = i
+                elif h in ("TOTAL", "XRAPM", "RPM", "RAPM"):
+                    total_idx = i
+                elif h.startswith("OFFENSE") or h in ("OFF",):
+                    offense_idx = i
+                elif h.startswith("DEFENSE") or h in ("DEF",):
+                    defense_idx = i
+
+            # Try standard row-based parsing first
+            tbody = table.find("tbody")
+            rows = tbody.find_all("tr") if tbody else table.find_all("tr")[1:]
+
+            if rows and rows[0].find_all("td"):
+                # Standard parsing works
                 for row in rows:
-                    cells = row.find_all(["td", "th"])
-                    if len(cells) < 4:
-                        continue
+                    self._parse_xrapm_row(
+                        row.find_all(["td", "th"]),
+                        name_idx, offense_idx, defense_idx, total_idx,
+                        result,
+                    )
+            else:
+                # Malformed HTML fallback: collect all <td> from tbody and
+                # group by column count since <tr> tags are missing
+                if tbody:
+                    all_tds = tbody.find_all("td")
+                else:
+                    all_tds = table.find_all("td")
 
-                    # ESPN typically: Rank, Name, Team, GP, MPG, ORPM, DRPM, RPM, WINS
-                    # Find name — usually the cell with an anchor tag
-                    name = None
-                    for cell in cells:
-                        link = cell.find("a")
-                        if link:
-                            name = link.get_text(strip=True)
-                            break
+                if not all_tds:
+                    result.error = "No table cells found on xrapm.com"
+                    return result
 
-                    if not name:
-                        # Try second cell as name
-                        name = cells[1].get_text(strip=True) if len(cells) > 1 else None
+                logger.debug(
+                    "xRAPM: using TD-grouping fallback (%d cells, %d cols)",
+                    len(all_tds), num_cols,
+                )
 
-                    if not name:
-                        continue
-
-                    # Try to find RPM values by looking for numeric cells
-                    numeric_vals = []
-                    for cell in cells:
-                        text = cell.get_text(strip=True)
-                        try:
-                            numeric_vals.append(float(text))
-                        except ValueError:
-                            numeric_vals.append(None)
-
-                    # RPM columns are typically: ORPM, DRPM, RPM
-                    # They are the last few numeric columns
-                    rpm_vals = [v for v in numeric_vals if v is not None]
-
-                    if len(rpm_vals) >= 3:
-                        # Last 3 numeric values are typically ORPM, DRPM, RPM
-                        # or RPM, ORPM, DRPM — check the header order
-                        orpm = _safe_decimal(rpm_vals[-3])
-                        drpm = _safe_decimal(rpm_vals[-2])
-                        rpm_total = _safe_decimal(rpm_vals[-1])
-
-                        # Sometimes the order is RPM, ORPM, DRPM
-                        # Verify: O + D should roughly equal total
-                        if orpm is not None and drpm is not None and rpm_total is not None:
-                            if abs(float(orpm) + float(drpm) - float(rpm_total)) > 1.0:
-                                # Try swapping — total might be first
-                                rpm_total, orpm, drpm = orpm, drpm, rpm_total
-
-                        player = AllInOnePlayerData(
-                            player_name=_normalize_name(name),
-                            overall=rpm_total,
-                            offense=orpm,
-                            defense=drpm,
-                        )
-                        result.players.append(player)
-                        rows_found += 1
-
-                if rows_found == 0:
-                    break
-
-                page += 1
-                time.sleep(1.0)  # Be polite to ESPN
+                for i in range(0, len(all_tds) - num_cols + 1, num_cols):
+                    cells = all_tds[i : i + num_cols]
+                    self._parse_xrapm_row(
+                        cells,
+                        name_idx, offense_idx, defense_idx, total_idx,
+                        result,
+                    )
 
             result.success = len(result.players) > 0
             if not result.success:
-                result.error = "No RPM data parsed from ESPN"
+                result.error = "No player rows parsed from xRAPM table"
 
         except httpx.HTTPError as e:
-            result.error = f"HTTP error: {e}"
-            # Partial success is still useful
-            if result.players:
-                result.success = True
+            result.error = f"HTTP error fetching xrapm.com: {e}"
         except Exception as e:
-            result.error = f"Error: {e}"
-            if result.players:
-                result.success = True
+            result.error = f"Error parsing xRAPM data: {e}"
 
         return result
+
+    def _parse_xrapm_row(
+        self,
+        cells: list,
+        name_idx: int,
+        offense_idx: int,
+        defense_idx: int,
+        total_idx: int,
+        result: ScraperResult,
+    ) -> None:
+        """Parse a single row of xRAPM data from table cells.
+
+        Args:
+            cells: List of BeautifulSoup td/th elements
+            name_idx: Column index for player name
+            offense_idx: Column index for offensive value
+            defense_idx: Column index for defensive value
+            total_idx: Column index for total value
+            result: ScraperResult to append player data to
+        """
+        if len(cells) < 3:
+            return
+
+        # Get player name - may be wrapped in a link
+        name_cell = cells[name_idx]
+        link = name_cell.find("a")
+        name = (
+            link.get_text(strip=True) if link else name_cell.get_text(strip=True)
+        )
+
+        if not name:
+            return
+
+        def _extract_value(cell_text: str) -> str | None:
+            """Extract numeric value, stripping percentile in parens.
+
+            xRAPM shows values like "7.2 (99)" where (99) is percentile.
+            """
+            cell_text = cell_text.strip()
+            if not cell_text:
+                return None
+            match = re.match(r"^(-?\d+\.?\d*)", cell_text)
+            return match.group(1) if match else None
+
+        overall_val = None
+        offense_val = None
+        defense_val = None
+
+        if total_idx < len(cells):
+            overall_val = _extract_value(cells[total_idx].get_text(strip=True))
+
+        if offense_idx < len(cells):
+            offense_val = _extract_value(cells[offense_idx].get_text(strip=True))
+
+        if defense_idx < len(cells):
+            defense_val = _extract_value(cells[defense_idx].get_text(strip=True))
+
+        player = AllInOnePlayerData(
+            player_name=_normalize_name(name),
+            overall=_safe_decimal(overall_val),
+            offense=_safe_decimal(offense_val),
+            defense=_safe_decimal(defense_val),
+        )
+        result.players.append(player)
 
 
 def build_name_lookup(
@@ -689,11 +835,19 @@ def build_name_lookup(
         normalized = _normalize_name(name).lower()
         lookup[normalized] = player_id
 
+        # Also index the ASCII-transliterated form for diacritical matching
+        ascii_name = _to_ascii(normalized)
+        if ascii_name != normalized:
+            lookup[ascii_name] = player_id
+
         # Also add last name only for common lookups
         parts = normalized.split()
         if len(parts) >= 2:
-            # "first last" -> also index by "last"
             lookup[parts[-1]] = player_id
+            # ASCII last name too
+            ascii_last = _to_ascii(parts[-1])
+            if ascii_last != parts[-1]:
+                lookup[ascii_last] = player_id
 
     return lookup
 
@@ -718,6 +872,11 @@ def match_player(
     # Exact match
     if normalized in lookup:
         return lookup[normalized]
+
+    # Try ASCII transliteration (e.g., "Jokić" -> "Jokic")
+    ascii_normalized = _to_ascii(normalized)
+    if ascii_normalized != normalized and ascii_normalized in lookup:
+        return lookup[ascii_normalized]
 
     # Try without periods (e.g., "P.J." -> "PJ")
     no_periods = normalized.replace(".", "")

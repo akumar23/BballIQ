@@ -439,7 +439,57 @@ def fetch_and_store_advanced_data(
     elif isinstance(league_averages, dict):
         league_avg_lookup = {k: safe_decimal(v) for k, v in league_averages.items()}
 
-    for shot_row in shot_data:
+    # The NBA API's LeagueDashPlayerShotLocations returns data with
+    # nested/tuple column headers: (zone_name, stat_name) e.g.
+    # ('Restricted Area', 'FGM'), ('', 'PLAYER_ID'). Flatten each
+    # player row into multiple per-zone records for storage.
+    def _flatten_shot_data(shot_data: list[dict]) -> list[dict]:
+        """Convert nested per-player shot data into per-zone records."""
+        flat_records = []
+        for row in shot_data:
+            # Extract player ID from tuple or flat key
+            player_id = None
+            for key, val in row.items():
+                if isinstance(key, tuple):
+                    if key[1] == "PLAYER_ID" or str(key[1]) == "PLAYER_ID":
+                        player_id = val
+                        break
+                elif key == "PLAYER_ID":
+                    player_id = val
+                    break
+
+            if not player_id:
+                continue
+
+            # Collect zone data from tuple keys
+            zones: dict[str, dict] = {}
+            total_fga = Decimal(0)
+            for key, val in row.items():
+                if not isinstance(key, tuple) or len(key) != 2:
+                    continue
+                zone_name, stat_name = str(key[0]), str(key[1])
+                if not zone_name:  # Skip metadata columns like ('', 'PLAYER_ID')
+                    continue
+                if zone_name not in zones:
+                    zones[zone_name] = {"PLAYER_ID": player_id, "ZONE_NAME": zone_name}
+                zones[zone_name][stat_name] = val
+                if stat_name == "FGA" and val is not None:
+                    total_fga += Decimal(str(val))
+
+            for zone_name, zone_dict in zones.items():
+                zone_dict["TOTAL_FGA"] = total_fga
+                flat_records.append(zone_dict)
+
+        return flat_records
+
+    # Check if data has tuple keys (nested format) or flat keys
+    if shot_data and any(isinstance(k, tuple) for k in shot_data[0].keys()):
+        shot_records = _flatten_shot_data(shot_data)
+        logger.info("Flattened %d players into %d zone records", len(shot_data), len(shot_records))
+    else:
+        shot_records = shot_data
+
+    for shot_row in shot_records:
         try:
             player_id = shot_row.get("PLAYER_ID")
             if not player_id:
@@ -457,8 +507,11 @@ def fetch_and_store_advanced_data(
             # Calculate frequency if total FGA is available
             total_fga = safe_decimal(shot_row.get("TOTAL_FGA"))
             freq = None
-            if total_fga and total_fga > 0 and fga is not None:
-                freq = fga / total_fga
+            try:
+                if total_fga and total_fga > 0 and fga is not None:
+                    freq = fga / total_fga
+            except Exception:
+                freq = None
 
             # Look up league average for this zone
             league_avg = league_avg_lookup.get(zone_name)
