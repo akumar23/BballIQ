@@ -25,7 +25,6 @@ from app.services.redis_cache import (
     CacheKeyPrefix,
     DecimalEncoder,
     RedisCacheService,
-    decimal_decoder,
     get_cached_or_fetch,
     redis_cache,
 )

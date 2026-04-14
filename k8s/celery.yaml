@@ -29,13 +29,25 @@ spec:
             - --concurrency=1
           env:
             - name: DATABASE_URL
-              value: postgresql://postgres:postgres@db:5432/nba_stats
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: DATABASE_URL
             - name: REDIS_URL
-              value: redis://redis:6379/0
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: REDIS_URL
             - name: CELERY_BROKER_URL
-              value: redis://redis:6379/1
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: CELERY_BROKER_URL
             - name: CELERY_RESULT_BACKEND
-              value: redis://redis:6379/2
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: CELERY_RESULT_BACKEND
             - name: NBA_API_CACHE_DIR
               value: /app/data/nba_api_cache
           volumeMounts:
@@ -74,10 +86,22 @@ spec:
             - --loglevel=info
           env:
             - name: DATABASE_URL
-              value: postgresql://postgres:postgres@db:5432/nba_stats
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: DATABASE_URL
             - name: REDIS_URL
-              value: redis://redis:6379/0
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: REDIS_URL
             - name: CELERY_BROKER_URL
-              value: redis://redis:6379/1
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: CELERY_BROKER_URL
             - name: CELERY_RESULT_BACKEND
-              value: redis://redis:6379/2
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: CELERY_RESULT_BACKEND

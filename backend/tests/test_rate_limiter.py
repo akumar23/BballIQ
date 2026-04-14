@@ -7,7 +7,6 @@ This module tests:
 - Exponential backoff delay calculation
 - Jitter range validation
 - Rate limit and server error detection
-- @with_retry decorator behavior
 """
 
 import time
@@ -17,13 +16,10 @@ import pytest
 
 from app.services.rate_limiter import (
     CircuitBreaker,
-    CircuitBreakerError,
     CircuitState,
-    RateLimitError,
     calculate_backoff_delay,
     is_rate_limit_error,
     is_server_error,
-    with_retry,
 )
 
 
@@ -324,182 +320,6 @@ class TestIsServerError:
         """Verify 4xx status codes are not flagged as server errors."""
         exception = Exception(f"HTTP {status_code} Client Error")
         assert is_server_error(exception) is False
-
-
-class TestWithRetryDecorator:
-    """Tests for the @with_retry decorator."""
-
-    def test_succeeds_on_first_try(self, mock_settings):
-        """Verify function returns immediately on success."""
-        with patch("app.services.rate_limiter.settings", mock_settings):
-            call_count = 0
-
-            @with_retry(max_retries=3, base_delay=0.01)
-            def successful_func():
-                nonlocal call_count
-                call_count += 1
-                return "success"
-
-            result = successful_func()
-
-            assert result == "success"
-            assert call_count == 1
-
-    def test_retries_on_rate_limit_error(self, mock_settings):
-        """Verify decorator retries on rate limit errors."""
-        with patch("app.services.rate_limiter.settings", mock_settings):
-            call_count = 0
-
-            @with_retry(max_retries=3, base_delay=0.01)
-            def flaky_func():
-                nonlocal call_count
-                call_count += 1
-                if call_count < 3:
-                    raise Exception("429 Too Many Requests")
-                return "success"
-
-            result = flaky_func()
-
-            assert result == "success"
-            assert call_count == 3
-
-    def test_retries_on_server_error(self, mock_settings):
-        """Verify decorator retries on server errors."""
-        with patch("app.services.rate_limiter.settings", mock_settings):
-            call_count = 0
-
-            @with_retry(max_retries=3, base_delay=0.01)
-            def server_error_func():
-                nonlocal call_count
-                call_count += 1
-                if call_count < 2:
-                    raise Exception("HTTP 503 Service Unavailable")
-                return "success"
-
-            result = server_error_func()
-
-            assert result == "success"
-            assert call_count == 2
-
-    def test_raises_after_max_retries(self, mock_settings):
-        """Verify RateLimitError is raised after max retries exceeded."""
-        with patch("app.services.rate_limiter.settings", mock_settings):
-
-            @with_retry(max_retries=2, base_delay=0.01)
-            def always_rate_limited():
-                raise Exception("429 Too Many Requests")
-
-            with pytest.raises(RateLimitError) as exc_info:
-                always_rate_limited()
-
-            assert "Rate limited after 3 attempts" in str(exc_info.value)
-
-    def test_raises_non_retryable_error_immediately(self, mock_settings):
-        """Verify non-retryable errors are raised immediately."""
-        with patch("app.services.rate_limiter.settings", mock_settings):
-            call_count = 0
-
-            @with_retry(max_retries=3, base_delay=0.01)
-            def auth_error_func():
-                nonlocal call_count
-                call_count += 1
-                raise ValueError("Invalid credentials")
-
-            with pytest.raises(ValueError) as exc_info:
-                auth_error_func()
-
-            assert "Invalid credentials" in str(exc_info.value)
-            assert call_count == 1  # No retries for non-retryable errors
-
-    def test_respects_circuit_breaker(self, mock_settings):
-        """Verify decorator respects circuit breaker state."""
-        with patch("app.services.rate_limiter.settings", mock_settings):
-            breaker = CircuitBreaker(
-                name="test",
-                failure_threshold=2,
-                recovery_timeout=60.0,
-            )
-
-            # Open the circuit
-            breaker.record_failure()
-            breaker.record_failure()
-
-            @with_retry(max_retries=3, circuit_breaker=breaker, base_delay=0.01)
-            def blocked_func():
-                return "should not reach here"
-
-            with pytest.raises(CircuitBreakerError) as exc_info:
-                blocked_func()
-
-            assert "circuit breaker" in str(exc_info.value).lower()
-
-    def test_calls_on_retry_callback(self, mock_settings):
-        """Verify on_retry callback is called before each retry."""
-        with patch("app.services.rate_limiter.settings", mock_settings):
-            retry_log = []
-
-            def on_retry_callback(attempt, exception, delay):
-                retry_log.append((attempt, str(exception), delay > 0))
-
-            call_count = 0
-
-            @with_retry(
-                max_retries=3,
-                base_delay=0.01,
-                on_retry=on_retry_callback,
-            )
-            def flaky_with_callback():
-                nonlocal call_count
-                call_count += 1
-                if call_count < 3:
-                    raise Exception("503 Service Unavailable")
-                return "success"
-
-            result = flaky_with_callback()
-
-            assert result == "success"
-            assert len(retry_log) == 2  # Called before retry 1 and 2
-            assert retry_log[0][0] == 1  # First retry attempt
-            assert retry_log[1][0] == 2  # Second retry attempt
-
-    def test_records_success_to_circuit_breaker(self, mock_settings):
-        """Verify successful call is recorded to circuit breaker."""
-        with patch("app.services.rate_limiter.settings", mock_settings):
-            breaker = CircuitBreaker(
-                name="test",
-                failure_threshold=5,
-            )
-
-            # Add some failures
-            breaker.record_failure()
-            breaker.record_failure()
-
-            @with_retry(max_retries=3, circuit_breaker=breaker, base_delay=0.01)
-            def success_func():
-                return "success"
-
-            success_func()
-
-            # Success should have reset failure count
-            assert breaker._failure_count == 0
-
-    def test_records_failure_to_circuit_breaker(self, mock_settings):
-        """Verify failures are recorded to circuit breaker."""
-        with patch("app.services.rate_limiter.settings", mock_settings):
-            breaker = CircuitBreaker(
-                name="test",
-                failure_threshold=10,
-            )
-
-            @with_retry(max_retries=2, circuit_breaker=breaker, base_delay=0.01)
-            def always_fails():
-                raise Exception("503 Service Error")
-
-            with pytest.raises(Exception):
-                always_fails()
-
-            # Should have recorded multiple failures
-            assert breaker._failure_count > 0
 
 
 class TestCircuitBreakerThreadSafety:

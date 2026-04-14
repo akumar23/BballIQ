@@ -3,7 +3,6 @@
 This module provides:
 - Exponential backoff with jitter for retry logic
 - Circuit breaker pattern for failing fast
-- Configurable retry decorator for API calls
 - Custom requests session with proper headers
 """
 
@@ -13,8 +12,6 @@ import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from functools import wraps
-from typing import Any, Callable, TypeVar
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -24,9 +21,6 @@ from app.core.config import settings
 
 
 logger = logging.getLogger(__name__)
-
-# Type variable for generic function return types
-T = TypeVar("T")
 
 
 class CircuitState(Enum):
@@ -288,116 +282,6 @@ def is_server_error(exception: Exception) -> bool:
     """Check if an exception indicates a server error (5xx)."""
     error_str = str(exception)
     return any(str(code) in error_str for code in [500, 502, 503, 504])
-
-
-def with_retry(
-    max_retries: int | None = None,
-    circuit_breaker: CircuitBreaker | None = None,
-    base_delay: float | None = None,
-    on_retry: Callable[[int, Exception, float], None] | None = None,
-) -> Callable[[Callable[..., T]], Callable[..., T]]:
-    """Decorator for retrying functions with exponential backoff.
-
-    Args:
-        max_retries: Maximum number of retry attempts
-        circuit_breaker: Optional circuit breaker to use
-        base_delay: Base delay between retries
-        on_retry: Optional callback called before each retry
-                  with (attempt, exception, delay)
-
-    Returns:
-        Decorated function with retry logic
-
-    Raises:
-        CircuitBreakerError: If circuit breaker is open
-        RateLimitError: If max retries exceeded due to rate limiting
-        Exception: Original exception if non-retryable
-    """
-    max_retries = max_retries if max_retries is not None else settings.nba_api_max_retries
-    base_delay = base_delay if base_delay is not None else settings.nba_api_base_delay
-
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
-        @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> T:
-            # Check circuit breaker
-            if circuit_breaker and not circuit_breaker.can_execute():
-                recovery_time = circuit_breaker.recovery_timeout
-                if circuit_breaker._last_failure_time:
-                    elapsed = time.time() - circuit_breaker._last_failure_time
-                    recovery_time = max(0, circuit_breaker.recovery_timeout - elapsed)
-
-                raise CircuitBreakerError(
-                    f"Circuit breaker '{circuit_breaker.name}' is open. "
-                    f"Recovery in {recovery_time:.1f}s",
-                    recovery_time,
-                )
-
-            last_exception: Exception | None = None
-
-            for attempt in range(max_retries + 1):
-                try:
-                    # Add base delay before each request (except first)
-                    if attempt > 0:
-                        delay = calculate_backoff_delay(
-                            attempt - 1, base_delay=base_delay
-                        )
-                        logger.debug(
-                            "Retry attempt %d/%d for %s, waiting %.2fs",
-                            attempt,
-                            max_retries,
-                            func.__name__,
-                            delay,
-                        )
-                        if on_retry:
-                            on_retry(attempt, last_exception, delay)
-                        time.sleep(delay)
-                    else:
-                        # Initial delay to avoid hammering the API
-                        time.sleep(base_delay)
-
-                    result = func(*args, **kwargs)
-
-                    # Record success for circuit breaker
-                    if circuit_breaker:
-                        circuit_breaker.record_success()
-
-                    return result
-
-                except Exception as e:
-                    last_exception = e
-                    logger.warning(
-                        "Request failed (attempt %d/%d): %s",
-                        attempt + 1,
-                        max_retries + 1,
-                        str(e),
-                    )
-
-                    # Check if this is a retryable error
-                    if is_rate_limit_error(e) or is_server_error(e):
-                        if circuit_breaker:
-                            circuit_breaker.record_failure()
-                        continue
-                    else:
-                        # Non-retryable error, fail immediately
-                        if circuit_breaker:
-                            circuit_breaker.record_failure()
-                        raise
-
-            # Max retries exceeded
-            if circuit_breaker:
-                circuit_breaker.record_failure()
-
-            if last_exception and is_rate_limit_error(last_exception):
-                raise RateLimitError(
-                    f"Rate limited after {max_retries + 1} attempts: {last_exception}",
-                    retry_after=calculate_backoff_delay(max_retries),
-                )
-
-            raise last_exception or Exception("Unknown error during retry")
-
-        return wrapper
-
-    return decorator
 
 
 # Global circuit breaker for NBA API

@@ -4,7 +4,7 @@ These tasks wrap the existing fetch scripts to run as scheduled background jobs.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from celery import chain, group
 
@@ -23,7 +23,7 @@ def get_current_season() -> str:
     NBA season typically starts in October and ends in June.
     A season like 2024-25 runs from October 2024 to June 2025.
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     year = now.year
     month = now.month
 
