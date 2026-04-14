@@ -29,3 +29,10 @@ export function usePerGameLeaderboard(sortBy: string, season?: string, limit = 1
     queryFn: () => api.leaderboards.perGame(sortBy, season, limit),
   })
 }
+
+export function useLeaderboardSeasons() {
+  return useQuery({
+    queryKey: ['leaderboard', 'seasons'],
+    queryFn: () => api.leaderboards.seasons(),
+  })
+}

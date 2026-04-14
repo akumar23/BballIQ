@@ -1,10 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { usePerGameLeaderboard } from '@/hooks/usePlayers'
+import { usePerGameLeaderboard, useLeaderboardSeasons } from '@/hooks/usePlayers'
 import { cn } from '@/lib/utils'
 import type { PlayerPerGameStats } from '@/types'
-import { useSeason } from '@/context/SeasonContext'
-
 type StatKey = 'ppg' | 'rpg' | 'apg' | 'mpg' | 'spg' | 'bpg'
 
 const TABS: { key: StatKey; label: string }[] = [
@@ -56,9 +54,10 @@ function PlayerRow({ player, rank, statKey }: { player: PlayerPerGameStats; rank
 }
 
 export default function LeagueLeadersPage() {
-  const { season } = useSeason()
   const [activeTab, setActiveTab] = useState<StatKey>('ppg')
-  const { data: players, isLoading, error } = usePerGameLeaderboard(activeTab, season, 50)
+  const [selectedSeason, setSelectedSeason] = useState<string>('2024-25')
+  const { data: seasons } = useLeaderboardSeasons()
+  const { data: players, isLoading, error } = usePerGameLeaderboard(activeTab, selectedSeason, 50)
 
   return (
     <div>
@@ -68,6 +67,15 @@ export default function LeagueLeadersPage() {
       </div>
 
       <div className="flex gap-2 mb-6">
+        <select
+          value={selectedSeason}
+          onChange={e => setSelectedSeason(e.target.value)}
+          className="px-3 py-2 rounded-lg bg-gray-100 text-gray-600 font-medium"
+        >
+          {seasons?.map(s => (
+            <option key={s.season} value={s.season}>{s.season}</option>
+          ))}
+        </select>
         {TABS.map(tab => (
           <button
             key={tab.key}
