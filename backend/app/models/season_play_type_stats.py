@@ -117,4 +117,14 @@ class SeasonPlayTypeStats(Base):
     off_screen_freq: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
     off_screen_ppp_percentile: Mapped[int | None]
 
+    # Handoff
+    handoff_poss: Mapped[int | None]
+    handoff_pts: Mapped[int | None]
+    handoff_fgm: Mapped[int | None]
+    handoff_fga: Mapped[int | None]
+    handoff_ppp: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
+    handoff_fg_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
+    handoff_freq: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
+    handoff_ppp_percentile: Mapped[int | None]
+
     player = relationship("Player", back_populates="season_play_type_stats")

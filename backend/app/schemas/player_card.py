@@ -96,6 +96,7 @@ class CardPlayTypes(BaseModel):
     transition: CardPlayType | None = None
     cut: CardPlayType | None = None
     off_screen: CardPlayType | None = None
+    handoff: CardPlayType | None = None
 
 
 class CardShotZone(BaseModel):
@@ -249,12 +250,117 @@ class CardChampionship(BaseModel):
     playoff_projection: CardPlayoffProjection | None = None
 
 
+class CardSpeedDistance(BaseModel):
+    dist_miles: Decimal | None = None
+    dist_miles_off: Decimal | None = None
+    dist_miles_def: Decimal | None = None
+    avg_speed: Decimal | None = None
+    avg_speed_off: Decimal | None = None
+    avg_speed_def: Decimal | None = None
+
+
+class CardPassing(BaseModel):
+    passes_made: Decimal | None = None
+    passes_received: Decimal | None = None
+    secondary_ast: Decimal | None = None
+    potential_ast: Decimal | None = None
+    ast_points_created: Decimal | None = None
+    ast_adj: Decimal | None = None
+    ast_to_pass_pct: Decimal | None = None
+    ast_to_pass_pct_adj: Decimal | None = None
+
+
+class CardReboundingTracking(BaseModel):
+    oreb_contest_pct: Decimal | None = None
+    oreb_chance_pct: Decimal | None = None
+    oreb_chance_pct_adj: Decimal | None = None
+    avg_oreb_dist: Decimal | None = None
+    dreb_contest_pct: Decimal | None = None
+    dreb_chance_pct: Decimal | None = None
+    dreb_chance_pct_adj: Decimal | None = None
+    avg_dreb_dist: Decimal | None = None
+    reb_contest_pct: Decimal | None = None
+    reb_chance_pct: Decimal | None = None
+    reb_chance_pct_adj: Decimal | None = None
+
+
+class CardDefenderDistanceEntry(BaseModel):
+    range: str
+    fga_freq: Decimal | None = None
+    fg_pct: Decimal | None = None
+    efg_pct: Decimal | None = None
+    fg3_pct: Decimal | None = None
+
+
+class CardDefensivePlayType(BaseModel):
+    poss: int | None = None
+    ppp: Decimal | None = None
+    fg_pct: Decimal | None = None
+    tov_pct: Decimal | None = None
+    freq: Decimal | None = None
+    percentile: Decimal | None = None
+
+
+class CardDefensivePlayTypes(BaseModel):
+    isolation: CardDefensivePlayType | None = None
+    pnr_ball_handler: CardDefensivePlayType | None = None
+    post_up: CardDefensivePlayType | None = None
+    spot_up: CardDefensivePlayType | None = None
+    transition: CardDefensivePlayType | None = None
+
+
+class CardGameLog(BaseModel):
+    game_date: str | None = None
+    matchup: str | None = None
+    wl: str | None = None
+    minutes: Decimal | None = None
+    pts: int | None = None
+    reb: int | None = None
+    ast: int | None = None
+    stl: int | None = None
+    blk: int | None = None
+    tov: int | None = None
+    fg_pct: Decimal | None = None
+    fg3_pct: Decimal | None = None
+    plus_minus: int | None = None
+    game_score: Decimal | None = None
+
+
+class CardConsistency(BaseModel):
+    games_used: int | None = None
+    pts_cv: Decimal | None = None
+    ast_cv: Decimal | None = None
+    reb_cv: Decimal | None = None
+    game_score_cv: Decimal | None = None
+    game_score_avg: Decimal | None = None
+    game_score_std: Decimal | None = None
+    game_score_max: Decimal | None = None
+    game_score_min: Decimal | None = None
+    boom_games: int | None = None
+    bust_games: int | None = None
+    boom_pct: Decimal | None = None
+    bust_pct: Decimal | None = None
+    best_streak: int | None = None
+    worst_streak: int | None = None
+    dd_rate: Decimal | None = None
+    td_rate: Decimal | None = None
+    consistency_score: int | None = None
+
+
 class PlayerCardData(BaseModel):
     id: int
     nba_id: int
     name: str
     position: str | None = None
     team_abbreviation: str | None = None
+    height: str | None = None
+    weight: int | None = None
+    jersey_number: str | None = None
+    age: str | None = None
+    country: str | None = None
+    draft_year: int | None = None
+    draft_round: int | None = None
+    draft_number: int | None = None
     season: str
     traditional: CardTraditional | None = None
     advanced: CardAdvanced | None = None
@@ -272,3 +378,10 @@ class PlayerCardData(BaseModel):
     portability: CardPortability | None = None
     championship: CardChampionship | None = None
     lineup_context: CardLineupContext | None = None
+    speed_distance: CardSpeedDistance | None = None
+    passing: CardPassing | None = None
+    rebounding_tracking: CardReboundingTracking | None = None
+    defender_distance: list[CardDefenderDistanceEntry] = []
+    defensive_play_types: CardDefensivePlayTypes | None = None
+    recent_games: list[CardGameLog] = []
+    consistency: CardConsistency | None = None

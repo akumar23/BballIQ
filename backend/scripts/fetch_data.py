@@ -328,6 +328,9 @@ def fetch_and_store_data(
             # Update touch tracking stats
             season_stats.total_touches = data.touches
             season_stats.total_front_court_touches = data.front_court_touches
+            season_stats.total_paint_touches = data.paint_touches
+            season_stats.total_post_touches = data.post_touches
+            season_stats.total_elbow_touches = data.elbow_touches
             season_stats.total_time_of_possession = data.time_of_possession
             season_stats.avg_points_per_touch = data.points_per_touch
 

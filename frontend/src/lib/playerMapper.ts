@@ -41,8 +41,8 @@ export function mapApiToPlayer(data: PlayerCardData): CortexPlayer {
     name: data.name,
     team: data.team_abbreviation ?? 'N/A',
     position: data.position ?? 'N/A',
-    age: 0,
-    number: 0,
+    age: data.age ? parseFloat(data.age) : 0,
+    number: data.jersey_number ? parseInt(data.jersey_number, 10) || 0 : 0,
     mpg: n(t?.mpg),
 
     traditional: {
@@ -112,7 +112,7 @@ export function mapApiToPlayer(data: PlayerCardData): CortexPlayer {
       transition: mapPlayType(pt?.transition),
       cut: mapPlayType(pt?.cut),
       off_screen: mapPlayType(pt?.off_screen),
-      handoff: { freq: 0, ppp: 0, rank: 0, efg: 0 },
+      handoff: mapPlayType(pt?.handoff),
     },
 
     shotZones: data.shot_zones.map((z) => ({
@@ -286,5 +286,113 @@ export function mapApiToPlayer(data: PlayerCardData): CortexPlayer {
         minutes: n(lctx?.without_top_teammate?.minutes),
       },
     },
+
+    speedDistance: data.speed_distance
+      ? {
+          distMiles: n(data.speed_distance.dist_miles),
+          distMilesOff: n(data.speed_distance.dist_miles_off),
+          distMilesDef: n(data.speed_distance.dist_miles_def),
+          avgSpeed: n(data.speed_distance.avg_speed),
+          avgSpeedOff: n(data.speed_distance.avg_speed_off),
+          avgSpeedDef: n(data.speed_distance.avg_speed_def),
+        }
+      : null,
+
+    passing: data.passing
+      ? {
+          passesMade: n(data.passing.passes_made),
+          passesReceived: n(data.passing.passes_received),
+          secondaryAst: n(data.passing.secondary_ast),
+          potentialAst: n(data.passing.potential_ast),
+          astPointsCreated: n(data.passing.ast_points_created),
+          astAdj: n(data.passing.ast_adj),
+          astToPassPct: n(data.passing.ast_to_pass_pct),
+          astToPassPctAdj: n(data.passing.ast_to_pass_pct_adj),
+        }
+      : null,
+
+    reboundingTracking: data.rebounding_tracking
+      ? {
+          orebContestPct: n(data.rebounding_tracking.oreb_contest_pct),
+          orebChancePct: n(data.rebounding_tracking.oreb_chance_pct),
+          orebChancePctAdj: n(data.rebounding_tracking.oreb_chance_pct_adj),
+          avgOrebDist: n(data.rebounding_tracking.avg_oreb_dist),
+          drebContestPct: n(data.rebounding_tracking.dreb_contest_pct),
+          drebChancePct: n(data.rebounding_tracking.dreb_chance_pct),
+          drebChancePctAdj: n(data.rebounding_tracking.dreb_chance_pct_adj),
+          avgDrebDist: n(data.rebounding_tracking.avg_dreb_dist),
+          rebContestPct: n(data.rebounding_tracking.reb_contest_pct),
+          rebChancePct: n(data.rebounding_tracking.reb_chance_pct),
+          rebChancePctAdj: n(data.rebounding_tracking.reb_chance_pct_adj),
+        }
+      : null,
+
+    recentGames: (data.recent_games ?? []).map((g) => ({
+      gameDate: g.game_date ?? '',
+      matchup: g.matchup ?? '',
+      wl: g.wl ?? '',
+      minutes: n(g.minutes),
+      pts: g.pts ?? 0,
+      reb: g.reb ?? 0,
+      ast: g.ast ?? 0,
+      stl: g.stl ?? 0,
+      blk: g.blk ?? 0,
+      tov: g.tov ?? 0,
+      fgPct: n(g.fg_pct),
+      fg3Pct: n(g.fg3_pct),
+      plusMinus: g.plus_minus ?? 0,
+      gameScore: n(g.game_score),
+    })),
+
+    consistency: data.consistency
+      ? {
+          gamesUsed: data.consistency.games_used ?? 0,
+          ptsCv: n(data.consistency.pts_cv),
+          astCv: n(data.consistency.ast_cv),
+          rebCv: n(data.consistency.reb_cv),
+          gameScoreCv: n(data.consistency.game_score_cv),
+          gameScoreAvg: n(data.consistency.game_score_avg),
+          gameScoreStd: n(data.consistency.game_score_std),
+          gameScoreMax: n(data.consistency.game_score_max),
+          gameScoreMin: n(data.consistency.game_score_min),
+          boomGames: data.consistency.boom_games ?? 0,
+          bustGames: data.consistency.bust_games ?? 0,
+          boomPct: n(data.consistency.boom_pct),
+          bustPct: n(data.consistency.bust_pct),
+          bestStreak: data.consistency.best_streak ?? 0,
+          worstStreak: data.consistency.worst_streak ?? 0,
+          ddRate: n(data.consistency.dd_rate),
+          tdRate: n(data.consistency.td_rate),
+          consistencyScore: data.consistency.consistency_score ?? 0,
+        }
+      : null,
+
+    defenderDistance: (data.defender_distance ?? []).map((d) => ({
+      range: d.range,
+      fgaFreq: n(d.fga_freq),
+      fgPct: n(d.fg_pct),
+      efgPct: n(d.efg_pct),
+      fg3Pct: n(d.fg3_pct),
+    })),
+
+    defensivePlayTypes: data.defensive_play_types
+      ? {
+          isolation: data.defensive_play_types.isolation
+            ? { poss: data.defensive_play_types.isolation.poss ?? 0, ppp: n(data.defensive_play_types.isolation.ppp), fgPct: n(data.defensive_play_types.isolation.fg_pct), tovPct: n(data.defensive_play_types.isolation.tov_pct), freq: n(data.defensive_play_types.isolation.freq), percentile: n(data.defensive_play_types.isolation.percentile) }
+            : null,
+          pnrBallHandler: data.defensive_play_types.pnr_ball_handler
+            ? { poss: data.defensive_play_types.pnr_ball_handler.poss ?? 0, ppp: n(data.defensive_play_types.pnr_ball_handler.ppp), fgPct: n(data.defensive_play_types.pnr_ball_handler.fg_pct), tovPct: n(data.defensive_play_types.pnr_ball_handler.tov_pct), freq: n(data.defensive_play_types.pnr_ball_handler.freq), percentile: n(data.defensive_play_types.pnr_ball_handler.percentile) }
+            : null,
+          postUp: data.defensive_play_types.post_up
+            ? { poss: data.defensive_play_types.post_up.poss ?? 0, ppp: n(data.defensive_play_types.post_up.ppp), fgPct: n(data.defensive_play_types.post_up.fg_pct), tovPct: n(data.defensive_play_types.post_up.tov_pct), freq: n(data.defensive_play_types.post_up.freq), percentile: n(data.defensive_play_types.post_up.percentile) }
+            : null,
+          spotUp: data.defensive_play_types.spot_up
+            ? { poss: data.defensive_play_types.spot_up.poss ?? 0, ppp: n(data.defensive_play_types.spot_up.ppp), fgPct: n(data.defensive_play_types.spot_up.fg_pct), tovPct: n(data.defensive_play_types.spot_up.tov_pct), freq: n(data.defensive_play_types.spot_up.freq), percentile: n(data.defensive_play_types.spot_up.percentile) }
+            : null,
+          transition: data.defensive_play_types.transition
+            ? { poss: data.defensive_play_types.transition.poss ?? 0, ppp: n(data.defensive_play_types.transition.ppp), fgPct: n(data.defensive_play_types.transition.fg_pct), tovPct: n(data.defensive_play_types.transition.tov_pct), freq: n(data.defensive_play_types.transition.freq), percentile: n(data.defensive_play_types.transition.percentile) }
+            : null,
+        }
+      : null,
   }
 }
