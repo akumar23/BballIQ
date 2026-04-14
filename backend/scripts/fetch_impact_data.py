@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import SessionLocal, engine
-from app.models import ContextualizedImpact, Player, PlayerOnOffStats
+from app.models import ContextualizedImpact, LineupStats, Player, PlayerOnOffStats
 from app.services.impact_calculator import ImpactCalculator
 from app.services.nba_data import NBADataService
 from app.services.rate_limiter import (
@@ -134,15 +134,19 @@ def fetch_and_store_impact_data(
         logger.error("Failed to fetch on/off data: %s", e)
         return False
 
-    # Step 3: Calculate contextualized impact
-    print("\nStep 3: Calculating contextualized impact ratings...")
+    # Step 3: Store lineup data
+    print("\nStep 3: Storing lineup data...")
+    _store_lineup_data(db, lineup_data, season)
+
+    # Step 4: Calculate contextualized impact
+    print("\nStep 4: Calculating contextualized impact ratings...")
     calculator = ImpactCalculator(lineup_data, on_off_data)
     impacts = calculator.calculate_all_impacts()
     print(f"  - Calculated impact for {len(impacts)} players")
     logger.info("Calculated impact for %d players", len(impacts))
 
-    # Step 4: Store in database
-    print("\nStep 4: Storing data in database...")
+    # Step 5: Store on/off and impact data
+    print("\nStep 5: Storing on/off and impact data...")
     processed = 0
     errors = 0
 
@@ -244,10 +248,61 @@ def fetch_and_store_impact_data(
         logger.warning("%d players had processing errors", errors)
 
     # Calculate percentiles
-    print("\nStep 5: Calculating impact percentiles...")
+    print("\nStep 6: Calculating impact percentiles...")
     calculate_impact_percentiles(season, db)
 
     return True
+
+
+def _store_lineup_data(
+    db: Session,
+    lineup_data: list,
+    season: str,
+) -> None:
+    """Persist 5-man lineup data to the lineup_stats table.
+
+    Maps NBA player IDs to internal DB IDs and upserts each lineup row.
+    """
+    # Build nba_id -> internal id lookup
+    players = db.query(Player.nba_id, Player.id).all()
+    nba_to_db: dict[int, int] = {int(p.nba_id): int(p.id) for p in players}
+
+    # Clear existing lineup data for this season
+    db.query(LineupStats).filter(LineupStats.season == season).delete()
+
+    stored = 0
+    skipped = 0
+    for lineup in lineup_data:
+        # Resolve all 5 player IDs to internal DB IDs
+        db_ids = [nba_to_db.get(pid) for pid in sorted(lineup.player_ids)]
+        if None in db_ids or len(db_ids) != 5:
+            skipped += 1
+            continue
+
+        row = LineupStats(
+            season=season,
+            team_id=lineup.team_id,
+            team_abbreviation=lineup.team_abbreviation,
+            lineup_id=lineup.lineup_id,
+            group_name="-".join(lineup.player_names) if lineup.player_names else None,
+            player1_id=db_ids[0],
+            player2_id=db_ids[1],
+            player3_id=db_ids[2],
+            player4_id=db_ids[3],
+            player5_id=db_ids[4],
+            games_played=lineup.games_played,
+            minutes=lineup.minutes,
+            plus_minus=lineup.plus_minus,
+            off_rating=lineup.off_rating,
+            def_rating=lineup.def_rating,
+            net_rating=lineup.net_rating,
+        )
+        db.add(row)
+        stored += 1
+
+    db.flush()
+    print(f"  - Stored {stored} lineups ({skipped} skipped — missing players)")
+    logger.info("Stored %d lineups (%d skipped)", stored, skipped)
 
 
 def calculate_impact_percentiles(season: str, db: Session) -> None:

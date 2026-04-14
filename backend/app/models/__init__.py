@@ -23,6 +23,7 @@ from app.models.raptor_history import RaptorHistory
 from app.models.mamba_history import MambaHistory
 from app.models.darko_history import DarkoHistory
 from app.models.forced_turnovers import ForcedTurnovers
+from app.models.lineup_stats import LineupStats
 
 __all__ = [
     "Player",
@@ -50,4 +51,5 @@ __all__ = [
     "MambaHistory",
     "DarkoHistory",
     "ForcedTurnovers",
+    "LineupStats",
 ]

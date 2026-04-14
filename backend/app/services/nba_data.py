@@ -861,6 +861,27 @@ class NBADataService:
             group_name = lineup.get("GROUP_NAME") or ""
             player_names = [n.strip() for n in group_name.split("-")]
 
+            # Totals mode doesn't return OFF_RATING/DEF_RATING/NET_RATING,
+            # so compute them from the box-score totals.
+            fga = float(lineup.get("FGA", 0) or 0)
+            oreb = float(lineup.get("OREB", 0) or 0)
+            tov = float(lineup.get("TOV", 0) or 0)
+            fta = float(lineup.get("FTA", 0) or 0)
+            pts = float(lineup.get("PTS", 0) or 0)
+            plus_minus = float(lineup.get("PLUS_MINUS", 0) or 0)
+
+            # Standard possession estimate: FGA - OREB + TOV + 0.44 * FTA
+            poss = fga - oreb + tov + 0.44 * fta
+
+            if poss > 0:
+                off_rating = Decimal(str(round(pts / poss * 100, 2)))
+                net_rating = Decimal(str(round(plus_minus / poss * 100, 2)))
+                def_rating = off_rating - net_rating
+            else:
+                off_rating = Decimal("0")
+                def_rating = Decimal("0")
+                net_rating = Decimal("0")
+
             lineups.append(
                 LineupData(
                     lineup_id="-".join(str(p) for p in sorted(player_ids)),
@@ -870,10 +891,10 @@ class NBADataService:
                     team_abbreviation=lineup.get("TEAM_ABBREVIATION", ""),
                     games_played=lineup.get("GP", 0) or 0,
                     minutes=Decimal(str(lineup.get("MIN", 0) or 0)),
-                    plus_minus=Decimal(str(lineup.get("PLUS_MINUS", 0) or 0)),
-                    off_rating=Decimal(str(lineup.get("OFF_RATING", 0) or 0)),
-                    def_rating=Decimal(str(lineup.get("DEF_RATING", 0) or 0)),
-                    net_rating=Decimal(str(lineup.get("NET_RATING", 0) or 0)),
+                    plus_minus=Decimal(str(plus_minus)),
+                    off_rating=off_rating,
+                    def_rating=def_rating,
+                    net_rating=net_rating,
                 )
             )
 
