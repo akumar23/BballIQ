@@ -394,18 +394,18 @@ def fetch_and_store_advanced_data(
                     def_stats.overall_pct_plusminus = safe_decimal(overall.get("PCT_PLUSMINUS"))
 
                 if rim:
-                    def_stats.rim_d_fgm = safe_decimal(rim.get("D_FGM"))
-                    def_stats.rim_d_fga = safe_decimal(rim.get("D_FGA"))
-                    def_stats.rim_d_fg_pct = safe_decimal(rim.get("D_FG_PCT"))
-                    def_stats.rim_normal_fg_pct = safe_decimal(rim.get("NORMAL_FG_PCT"))
-                    def_stats.rim_pct_plusminus = safe_decimal(rim.get("PCT_PLUSMINUS"))
+                    def_stats.rim_d_fgm = safe_decimal(rim.get("FGM_LT_06"))
+                    def_stats.rim_d_fga = safe_decimal(rim.get("FGA_LT_06"))
+                    def_stats.rim_d_fg_pct = safe_decimal(rim.get("LT_06_PCT"))
+                    def_stats.rim_normal_fg_pct = safe_decimal(rim.get("NS_LT_06_PCT"))
+                    def_stats.rim_pct_plusminus = safe_decimal(rim.get("PLUSMINUS"))
 
                 if three_pt:
-                    def_stats.three_pt_d_fgm = safe_decimal(three_pt.get("D_FGM"))
-                    def_stats.three_pt_d_fga = safe_decimal(three_pt.get("D_FGA"))
-                    def_stats.three_pt_d_fg_pct = safe_decimal(three_pt.get("D_FG_PCT"))
-                    def_stats.three_pt_normal_fg_pct = safe_decimal(three_pt.get("NORMAL_FG_PCT"))
-                    def_stats.three_pt_pct_plusminus = safe_decimal(three_pt.get("PCT_PLUSMINUS"))
+                    def_stats.three_pt_d_fgm = safe_decimal(three_pt.get("FG3M"))
+                    def_stats.three_pt_d_fga = safe_decimal(three_pt.get("FG3A"))
+                    def_stats.three_pt_d_fg_pct = safe_decimal(three_pt.get("FG3_PCT"))
+                    def_stats.three_pt_normal_fg_pct = safe_decimal(three_pt.get("NS_FG3_PCT"))
+                    def_stats.three_pt_pct_plusminus = safe_decimal(three_pt.get("PLUSMINUS"))
 
                 if iso:
                     def_stats.iso_poss = safe_int(iso.get("POSS"))

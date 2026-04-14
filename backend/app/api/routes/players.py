@@ -4,8 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from sqlalchemy import or_
+
 from app.models import (
     ContextualizedImpact,
+    LineupStats,
     Player,
     PlayerAdvancedStats,
     PlayerAllInOneMetrics,
@@ -799,36 +802,135 @@ async def get_player_card(
 
     # ------ Compute: Lineup Context ------
     card_lineup_ctx = None
-    if player.nba_id:
-        from app.services.nba_data import NBADataService
-        # Query stored lineup data — the LineupData from on/off fetch
-        # Use the lineup data already in the on_off_stats context
-        from sqlalchemy import text
-        # Query top 5 lineups containing this player from lineup data
-        # We need to use the lineup model or raw lineup stats
-        # For now, build from the DB lineup cross-join approach:
-        lineup_rows = (
-            db.execute(text("""
-                SELECT GROUP_ID, GROUP_NAME, MIN as minutes, PLUS_MINUS,
-                       OFF_RATING, DEF_RATING, NET_RATING, GP
-                FROM lineup_stats
-                WHERE GROUP_NAME LIKE :pname AND season = :season
-                ORDER BY MIN DESC LIMIT 5
-            """), {"pname": f"%{player.name.split()[-1]}%", "season": season})
-            .fetchall()
-        ) if False else []  # Skip raw SQL — not available without lineup_stats table
 
-        # Simpler: use the existing on/off data to build without-top-teammate
+    # Find top 3 lineups containing this player, ordered by minutes
+    player_lineups = (
+        db.query(LineupStats)
+        .filter(
+            LineupStats.season == season,
+            or_(
+                LineupStats.player1_id == player_id,
+                LineupStats.player2_id == player_id,
+                LineupStats.player3_id == player_id,
+                LineupStats.player4_id == player_id,
+                LineupStats.player5_id == player_id,
+            ),
+        )
+        .order_by(LineupStats.minutes.desc())
+        .limit(3)
+        .all()
+    )
+
+    if player_lineups:
+        # Build id -> name lookup for players in these lineups
+        lineup_player_ids = set()
+        for lu in player_lineups:
+            lineup_player_ids.update(
+                [lu.player1_id, lu.player2_id, lu.player3_id, lu.player4_id, lu.player5_id]
+            )
+        id_to_name: dict[int, str] = {
+            p.id: p.name
+            for p in db.query(Player.id, Player.name)
+            .filter(Player.id.in_(lineup_player_ids))
+            .all()
+        }
+
+        # Team baseline for Bayesian shrinkage: focal player's on-court net rating
+        team_baseline = Decimal("0")
+        if on_off and on_off.on_court_net_rating is not None:
+            team_baseline = on_off.on_court_net_rating
+
+        # Lineup ctx_net: regress raw net toward team baseline based on minutes.
+        # High-minute lineups keep their raw rating; low-minute lineups shrink
+        # toward the team baseline to account for small-sample noise.
+        FULL_RELIABILITY_MINUTES = Decimal("200")
+
+        def _lineup_ctx_net(raw_net: Decimal | None, minutes: Decimal | None) -> Decimal:
+            if raw_net is None:
+                return team_baseline
+            mins = minutes or Decimal("0")
+            ratio = mins / FULL_RELIABILITY_MINUTES
+            reliability = min(Decimal("1"), ratio.sqrt() if hasattr(ratio, "sqrt") else Decimal(str(float(ratio) ** 0.5)))
+            return (raw_net * reliability + team_baseline * (Decimal("1") - reliability)).quantize(Decimal("0.01"))
+
+        # Classify opponent tier based on lineup net rating
+        def _opp_tier(net: Decimal | None) -> str:
+            if net is None:
+                return ""
+            v = float(net)
+            if v >= 5:
+                return "Elite"
+            if v >= 0:
+                return "Good"
+            if v >= -5:
+                return "Average"
+            return "Poor"
+
+        top_lineups = []
+        for lu in player_lineups:
+            slot_ids = [lu.player1_id, lu.player2_id, lu.player3_id, lu.player4_id, lu.player5_id]
+            names = [id_to_name.get(pid, "?") for pid in slot_ids]
+
+            top_lineups.append(CardLineup(
+                players=names,
+                minutes=lu.minutes,
+                raw_net=lu.net_rating,
+                ctx_net=_lineup_ctx_net(lu.net_rating, lu.minutes),
+                opp_tier=_opp_tier(lu.net_rating),
+            ))
+
+        # "Without Top Teammate" — find the teammate with most shared minutes
+        # and show team performance when that teammate sits
         without_top_tm = None
         if on_off:
-            without_top_tm = CardWithoutTeammate(
-                teammate="(team without player)",
-                net_rtg=on_off.off_court_net_rating,
-                minutes=on_off.off_court_minutes,
+            # Count shared lineup minutes per teammate
+            teammate_minutes: dict[int, Decimal] = {}
+            all_player_lineups = (
+                db.query(LineupStats)
+                .filter(
+                    LineupStats.season == season,
+                    or_(
+                        LineupStats.player1_id == player_id,
+                        LineupStats.player2_id == player_id,
+                        LineupStats.player3_id == player_id,
+                        LineupStats.player4_id == player_id,
+                        LineupStats.player5_id == player_id,
+                    ),
+                )
+                .all()
             )
+            for lu in all_player_lineups:
+                slot_ids = [lu.player1_id, lu.player2_id, lu.player3_id, lu.player4_id, lu.player5_id]
+                lu_min = lu.minutes or Decimal("0")
+                for pid in slot_ids:
+                    if pid != player_id:
+                        teammate_minutes[pid] = teammate_minutes.get(pid, Decimal("0")) + lu_min
+
+            if teammate_minutes:
+                top_tm_id = max(teammate_minutes, key=lambda k: teammate_minutes[k])
+                top_tm_name = id_to_name.get(top_tm_id) or (
+                    db.query(Player.name).filter(Player.id == top_tm_id).scalar()
+                ) or "?"
+
+                # Get teammate's on/off data — their off-court net rating
+                # approximates team performance without them
+                tm_on_off = (
+                    db.query(PlayerOnOffStats)
+                    .filter(
+                        PlayerOnOffStats.player_id == top_tm_id,
+                        PlayerOnOffStats.season == season,
+                    )
+                    .first()
+                )
+                if tm_on_off:
+                    without_top_tm = CardWithoutTeammate(
+                        teammate=top_tm_name,
+                        net_rtg=tm_on_off.off_court_net_rating,
+                        minutes=tm_on_off.off_court_minutes,
+                    )
 
         card_lineup_ctx = CardLineupContext(
-            top_lineups=[],
+            top_lineups=top_lineups,
             without_top_teammate=without_top_tm,
         )
 

@@ -102,7 +102,7 @@ services:
     depends_on:
       - backend
 
-  # One-shot service: runs migrations + seeds all data
+  # One-shot service: runs migrations + seeds current season data
   # Usage: docker compose --profile seed run --rm seed
   seed:
     build:
@@ -124,6 +124,30 @@ services:
     command: python -m scripts.seed_all
     profiles:
       - seed
+
+  # One-shot service: seeds ALL data for EVERY season (2013-14 through 2024-25)
+  # Usage: docker compose --profile seed-all run --rm seed-all
+  # WARNING: This takes several hours due to NBA API rate limits
+  seed-all:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nba-stats-seed-all
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/nba_stats
+      REDIS_URL: redis://redis:6379/0
+      NBA_API_CACHE_DIR: /app/data/nba_api_cache
+    volumes:
+      - ./backend:/app
+      - nba_api_cache:/app/data/nba_api_cache
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: python -m scripts.seed_everything
+    profiles:
+      - seed-all
 
 volumes:
   postgres_data:
