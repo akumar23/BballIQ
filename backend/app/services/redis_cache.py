@@ -76,21 +76,6 @@ class DecimalEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
-def decimal_decoder(dct: dict[str, Any]) -> dict[str, Any]:
-    """Decode JSON with Decimal-like strings converted back.
-
-    Note: This is a basic decoder. For full fidelity, you would need
-    to track which fields were originally Decimals.
-
-    Args:
-        dct: Dictionary from JSON parsing
-
-    Returns:
-        Dictionary with values preserved
-    """
-    return dct
-
-
 class RedisCacheService:
     """Redis caching service with graceful degradation.
 
@@ -202,7 +187,7 @@ class RedisCacheService:
                 return None
 
             logger.debug("Cache hit: %s", key)
-            return json.loads(data, object_hook=decimal_decoder)
+            return json.loads(data)
 
         except (ConnectionError, TimeoutError) as e:
             logger.warning("Redis connection error during get: %s", e)

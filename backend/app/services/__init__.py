@@ -20,7 +20,6 @@ from app.services.rate_limiter import (
     is_server_error,
     nba_api_circuit_breaker,
     reset_nba_session,
-    with_retry,
 )
 from app.services.nba_data import (
     NBADataService,
@@ -53,7 +52,6 @@ __all__ = [
     "is_server_error",
     "nba_api_circuit_breaker",
     "reset_nba_session",
-    "with_retry",
     # NBA Data
     "NBADataService",
     "PlayerTrackingData",

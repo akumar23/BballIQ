@@ -45,7 +45,6 @@ from app.services.rate_limiter import (
     calculate_backoff_delay,
     get_nba_session,
     nba_api_circuit_breaker,
-    with_retry,
 )
 from app.services.redis_cache import (
     CacheKeyPrefix,
@@ -245,7 +244,6 @@ class PlayerTrackingData:
     fg3a: int
     ftm: int
     fta: int
-    ftm: int
     minutes: Decimal
     games_played: int
     rebounds: int
