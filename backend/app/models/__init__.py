@@ -24,6 +24,12 @@ from app.models.mamba_history import MambaHistory
 from app.models.darko_history import DarkoHistory
 from app.models.forced_turnovers import ForcedTurnovers
 from app.models.lineup_stats import LineupStats
+from app.models.speed_distance import PlayerSpeedDistance
+from app.models.passing_stats import PlayerPassingStats
+from app.models.rebounding_tracking import PlayerReboundingTracking
+from app.models.defender_distance_shooting import PlayerDefenderDistanceShooting
+from app.models.defensive_play_types import PlayerDefensivePlayTypes
+from app.models.consistency_stats import PlayerConsistencyStats
 
 __all__ = [
     "Player",
@@ -52,4 +58,10 @@ __all__ = [
     "DarkoHistory",
     "ForcedTurnovers",
     "LineupStats",
+    "PlayerSpeedDistance",
+    "PlayerPassingStats",
+    "PlayerReboundingTracking",
+    "PlayerDefenderDistanceShooting",
+    "PlayerDefensivePlayTypes",
+    "PlayerConsistencyStats",
 ]

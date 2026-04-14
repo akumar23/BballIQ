@@ -35,6 +35,12 @@ PHASES = [
         "earliest": "2013-14",
     },
     {
+        "key": "bio",
+        "label": "Phase 1b: Player Bio & Team Records",
+        "module": "scripts.fetch_bio_data",
+        "earliest": "2013-14",
+    },
+    {
         "key": "phase2",
         "label": "Phase 2: Computed Advanced (PER, BPM, WS)",
         "module": "scripts.fetch_phase2_data",
@@ -44,6 +50,12 @@ PHASES = [
         "key": "advanced",
         "label": "Phase 3: Advanced Stats + Shot Zones + Clutch + Defense",
         "module": "scripts.fetch_advanced_data",
+        "earliest": "2013-14",
+    },
+    {
+        "key": "tracking_advanced",
+        "label": "Phase 3b: Speed/Passing/Rebounding/Defender Distance/Def Play Types",
+        "module": "scripts.fetch_tracking_advanced",
         "earliest": "2013-14",
     },
     {
@@ -69,6 +81,12 @@ PHASES = [
         "label": "Phase 7: All-In-One Metrics (EPM, DARKO, LEBRON, RPM)",
         "module": "scripts.fetch_all_in_one_data",
         "earliest": "2024-25",  # External scraped data — only current season
+    },
+    {
+        "key": "game_logs",
+        "label": "Phase 7b: Game Logs & Consistency Metrics",
+        "module": "scripts.fetch_game_logs",
+        "earliest": "2013-14",
     },
     {
         "key": "nbarapm",

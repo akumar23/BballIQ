@@ -14,14 +14,21 @@ from app.models import (
     PlayerAllInOneMetrics,
     PlayerCareerStats,
     PlayerComputedAdvanced,
+    PlayerConsistencyStats,
+    PlayerDefenderDistanceShooting,
+    PlayerDefensivePlayTypes,
     PlayerDefensiveStats,
     PlayerMatchups,
     PlayerOnOffStats,
+    PlayerPassingStats,
+    PlayerReboundingTracking,
     PlayerShootingTracking,
     PlayerShotZones,
+    PlayerSpeedDistance,
     SeasonPlayTypeStats,
     SeasonStats,
 )
+from app.models.game_stats import GameStats
 from app.models.clutch_stats import PlayerClutchStats
 from app.models.per_75_stats import Per75Stats
 from app.schemas.player import PlayerDetail, PlayerList, PlayerCardOption
@@ -32,8 +39,13 @@ from app.schemas.player_card import (
     CardChampionship,
     CardChampionshipPillar,
     CardContextualized,
+    CardDefenderDistanceEntry,
     CardDefenseZone,
     CardDefensive,
+    CardConsistency,
+    CardDefensivePlayType,
+    CardDefensivePlayTypes,
+    CardGameLog,
     CardImpact,
     CardIsoDefense,
     CardAdjustmentStep,
@@ -44,19 +56,23 @@ from app.schemas.player_card import (
     CardMatchup,
     CardOnOff,
     CardOpponentTierEntry,
+    CardPassing,
     CardPlayoffProjection,
     CardPlayType,
     CardPlayTypes,
     CardPortability,
     CardRadar,
+    CardReboundingTracking,
     CardSchemeScore,
     CardShotZone,
+    CardSpeedDistance,
     CardTraditional,
     CardWithoutTeammate,
     PlayerCardData,
 )
 from app.services.championship import ChampionshipCalculator
 from app.services.luck_adjusted import LuckAdjustedCalculator
+from app.services.redis_cache import redis_cache
 from app.services.metrics_utils import safe_float, to_decimal
 from app.services.opponent_tier import TIER_WEIGHTS, OpponentTierCalculator
 from app.services.portability import PortabilityCalculator
@@ -449,25 +465,12 @@ async def get_player_card(
             adjustments=adjustments,
         )
 
-    # Actual wins from team record
+    # Actual wins from cached team records
     actual_wins = None
-    if season_stat and player.team_abbreviation:
-        from sqlalchemy import func
-        team_total_plus_minus = (
-            db.query(func.sum(SeasonStats.total_plus_minus))
-            .join(Player, Player.id == SeasonStats.player_id)
-            .filter(Player.team_abbreviation == player.team_abbreviation, SeasonStats.season == season)
-            .scalar()
-        )
-        # Rough estimate: team wins ≈ 41 + (total_plus_minus / (gp * 5)) * 0.03 * 82
-        # Simpler: use games played as proxy if plus_minus not useful
-        team_gp_max = (
-            db.query(func.max(SeasonStats.games_played))
-            .join(Player, Player.id == SeasonStats.player_id)
-            .filter(Player.team_abbreviation == player.team_abbreviation, SeasonStats.season == season)
-            .scalar()
-        )
-        actual_wins = team_gp_max  # Placeholder - real wins need team record table
+    if player.team_abbreviation:
+        team_records = redis_cache.get(f"team_records:{season}")
+        if team_records and player.team_abbreviation in team_records:
+            actual_wins = team_records[player.team_abbreviation].get("wins")
 
     if on_off_data or ctx_data:
         card_impact = CardImpact(on_off=on_off_data, contextualized=ctx_data, actual_wins=actual_wins)
@@ -484,6 +487,7 @@ async def get_player_card(
             transition=_card_play_type(play_types, "transition"),
             cut=_card_play_type(play_types, "cut"),
             off_screen=_card_play_type(play_types, "off_screen"),
+            handoff=_card_play_type(play_types, "handoff"),
         )
 
     # Shot zones (per-game FGA)
@@ -934,12 +938,147 @@ async def get_player_card(
             without_top_teammate=without_top_tm,
         )
 
+    # ------ New data: Speed & Distance ------
+    card_speed_distance = None
+    sd_row = (
+        db.query(PlayerSpeedDistance)
+        .filter(PlayerSpeedDistance.player_id == player_id, PlayerSpeedDistance.season == season)
+        .first()
+    )
+    if sd_row:
+        card_speed_distance = CardSpeedDistance(
+            dist_miles=sd_row.dist_miles, dist_miles_off=sd_row.dist_miles_off,
+            dist_miles_def=sd_row.dist_miles_def, avg_speed=sd_row.avg_speed,
+            avg_speed_off=sd_row.avg_speed_off, avg_speed_def=sd_row.avg_speed_def,
+        )
+
+    # ------ New data: Passing ------
+    card_passing = None
+    pass_row = (
+        db.query(PlayerPassingStats)
+        .filter(PlayerPassingStats.player_id == player_id, PlayerPassingStats.season == season)
+        .first()
+    )
+    if pass_row:
+        card_passing = CardPassing(
+            passes_made=pass_row.passes_made, passes_received=pass_row.passes_received,
+            secondary_ast=pass_row.secondary_ast, potential_ast=pass_row.potential_ast,
+            ast_points_created=pass_row.ast_points_created, ast_adj=pass_row.ast_adj,
+            ast_to_pass_pct=pass_row.ast_to_pass_pct, ast_to_pass_pct_adj=pass_row.ast_to_pass_pct_adj,
+        )
+
+    # ------ New data: Rebounding Tracking ------
+    card_reb_tracking = None
+    reb_row = (
+        db.query(PlayerReboundingTracking)
+        .filter(PlayerReboundingTracking.player_id == player_id, PlayerReboundingTracking.season == season)
+        .first()
+    )
+    if reb_row:
+        card_reb_tracking = CardReboundingTracking(
+            oreb_contest_pct=reb_row.oreb_contest_pct, oreb_chance_pct=reb_row.oreb_chance_pct,
+            oreb_chance_pct_adj=reb_row.oreb_chance_pct_adj, avg_oreb_dist=reb_row.avg_oreb_dist,
+            dreb_contest_pct=reb_row.dreb_contest_pct, dreb_chance_pct=reb_row.dreb_chance_pct,
+            dreb_chance_pct_adj=reb_row.dreb_chance_pct_adj, avg_dreb_dist=reb_row.avg_dreb_dist,
+            reb_contest_pct=reb_row.reb_contest_pct, reb_chance_pct=reb_row.reb_chance_pct,
+            reb_chance_pct_adj=reb_row.reb_chance_pct_adj,
+        )
+
+    # ------ New data: Defender Distance Shooting ------
+    card_def_dist: list[CardDefenderDistanceEntry] = []
+    dd_row = (
+        db.query(PlayerDefenderDistanceShooting)
+        .filter(PlayerDefenderDistanceShooting.player_id == player_id, PlayerDefenderDistanceShooting.season == season)
+        .first()
+    )
+    if dd_row:
+        for prefix, label in [("very_tight", "0-2 ft"), ("tight", "2-4 ft"), ("open", "4-6 ft"), ("wide_open", "6+ ft")]:
+            card_def_dist.append(CardDefenderDistanceEntry(
+                range=label,
+                fga_freq=getattr(dd_row, f"{prefix}_fga_freq"),
+                fg_pct=getattr(dd_row, f"{prefix}_fg_pct"),
+                efg_pct=getattr(dd_row, f"{prefix}_efg_pct"),
+                fg3_pct=getattr(dd_row, f"{prefix}_fg3_pct"),
+            ))
+
+    # ------ New data: Defensive Play Types ------
+    card_def_play_types = None
+    dpt_row = (
+        db.query(PlayerDefensivePlayTypes)
+        .filter(PlayerDefensivePlayTypes.player_id == player_id, PlayerDefensivePlayTypes.season == season)
+        .first()
+    )
+    if dpt_row:
+        def _card_def_pt(prefix: str) -> CardDefensivePlayType | None:
+            poss = getattr(dpt_row, f"{prefix}_poss")
+            if not poss:
+                return None
+            return CardDefensivePlayType(
+                poss=poss, ppp=getattr(dpt_row, f"{prefix}_ppp"),
+                fg_pct=getattr(dpt_row, f"{prefix}_fg_pct"),
+                tov_pct=getattr(dpt_row, f"{prefix}_tov_pct"),
+                freq=getattr(dpt_row, f"{prefix}_freq"),
+                percentile=getattr(dpt_row, f"{prefix}_percentile"),
+            )
+        card_def_play_types = CardDefensivePlayTypes(
+            isolation=_card_def_pt("iso"), pnr_ball_handler=_card_def_pt("pnr_ball_handler"),
+            post_up=_card_def_pt("post_up"), spot_up=_card_def_pt("spot_up"),
+            transition=_card_def_pt("transition"),
+        )
+
+    # ------ New data: Recent Games + Consistency ------
+    recent_game_rows = (
+        db.query(GameStats)
+        .filter(GameStats.player_id == player_id, GameStats.season == season)
+        .order_by(GameStats.game_date.desc())
+        .limit(10)
+        .all()
+    )
+    card_recent_games = [
+        CardGameLog(
+            game_date=g.game_date, matchup=g.matchup, wl=g.wl,
+            minutes=g.minutes, pts=g.points, reb=g.rebounds, ast=g.assists,
+            stl=g.steals, blk=g.blocks, tov=g.turnovers,
+            fg_pct=g.fg_pct, fg3_pct=g.fg3_pct,
+            plus_minus=g.plus_minus, game_score=g.game_score,
+        )
+        for g in recent_game_rows
+    ]
+
+    card_consistency = None
+    cons_row = (
+        db.query(PlayerConsistencyStats)
+        .filter(PlayerConsistencyStats.player_id == player_id, PlayerConsistencyStats.season == season)
+        .first()
+    )
+    if cons_row:
+        card_consistency = CardConsistency(
+            games_used=cons_row.games_used,
+            pts_cv=cons_row.pts_cv, ast_cv=cons_row.ast_cv, reb_cv=cons_row.reb_cv,
+            game_score_cv=cons_row.game_score_cv,
+            game_score_avg=cons_row.game_score_avg, game_score_std=cons_row.game_score_std,
+            game_score_max=cons_row.game_score_max, game_score_min=cons_row.game_score_min,
+            boom_games=cons_row.boom_games, bust_games=cons_row.bust_games,
+            boom_pct=cons_row.boom_pct, bust_pct=cons_row.bust_pct,
+            best_streak=cons_row.best_streak, worst_streak=cons_row.worst_streak,
+            dd_rate=cons_row.dd_rate, td_rate=cons_row.td_rate,
+            consistency_score=cons_row.consistency_score,
+        )
+
     return PlayerCardData(
         id=player.id,
         nba_id=player.nba_id,
         name=player.name,
         position=player.position,
         team_abbreviation=player.team_abbreviation,
+        height=player.height,
+        weight=player.weight,
+        jersey_number=player.jersey_number,
+        age=player.birth_date,
+        country=player.country,
+        draft_year=player.draft_year,
+        draft_round=player.draft_round,
+        draft_number=player.draft_number,
         season=season,
         traditional=traditional,
         advanced=advanced_stats,
@@ -957,4 +1096,11 @@ async def get_player_card(
         portability=card_portability,
         championship=card_championship,
         lineup_context=card_lineup_ctx,
+        speed_distance=card_speed_distance,
+        passing=card_passing,
+        rebounding_tracking=card_reb_tracking,
+        defender_distance=card_def_dist,
+        defensive_play_types=card_def_play_types,
+        recent_games=card_recent_games,
+        consistency=card_consistency,
     )

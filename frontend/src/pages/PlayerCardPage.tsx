@@ -126,13 +126,15 @@ export default function PlayerCardPage() {
           <div className="flex items-center gap-5 mb-6">
             <div className="w-14 h-14 rounded border-2 border-primary-600 flex items-center justify-center">
               <span className="text-primary-600 font-mono font-bold text-sm">
-                {cardData.position}
+                {cardData.number ? `#${cardData.number}` : cardData.position}
               </span>
             </div>
             <div className="flex-1">
               <h2 className="text-3xl font-bold text-gray-900">{cardData.name}</h2>
               <p className="text-gray-500 text-sm">
-                {cardData.team} · {cardData.position} ·{' '}
+                {cardData.team} · {cardData.position}
+                {cardData.age ? ` · ${Math.floor(cardData.age)} yrs` : ''}
+                {' '}·{' '}
                 <span className="font-mono">{cardData.mpg.toFixed(1)}</span> MPG ·{' '}
                 <span className="font-mono text-primary-600">
                   {selectedValue ? decodeOption(selectedValue).season : ''}

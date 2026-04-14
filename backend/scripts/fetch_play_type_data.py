@@ -10,6 +10,7 @@ This script fetches offensive play type data from NBA Synergy endpoints:
 - Transition
 - Cut
 - Off-screen
+- Handoff
 
 Usage:
     python -m scripts.fetch_play_type_data --season 2024-25
@@ -150,7 +151,7 @@ def fetch_and_store_play_type_data(
     service = NBADataService(bypass_cache=bypass_cache)
 
     # Step 1: Fetch all play type data
-    print(f"\nStep 1: Fetching play type data (8 API calls)...")
+    print(f"\nStep 1: Fetching play type data (9 API calls)...")
     print("  This may take 1-2 minutes with rate limiting...")
     try:
         play_type_data = service.fetch_all_play_type_data(
@@ -290,6 +291,7 @@ def calculate_ppp_percentiles(season: str, db: Session) -> None:
         "transition",
         "cut",
         "off_screen",
+        "handoff",
     ]
 
     for play_type in play_types:
@@ -381,7 +383,7 @@ def main() -> int:
     print(f"\nConfiguration:")
     print(f"  Season: {args.season}")
     print(f"  Cache bypass: {args.no_cache}")
-    print(f"\n  NOTE: This script makes 8 API calls (one per play type)")
+    print(f"\n  NOTE: This script makes 9 API calls (one per play type)")
     print(f"        Expected runtime: 1-2 minutes with rate limiting")
 
     if args.create_tables:

@@ -17,6 +17,11 @@ from nba_api.stats.endpoints import (
     CommonAllPlayers,
     LeagueDashPlayerStats,
 )
+from nba_api.stats.endpoints.leaguedashplayerbiostats import (
+    LeagueDashPlayerBioStats,
+)
+from nba_api.stats.endpoints.leaguedashplayerptshot import LeagueDashPlayerPtShot
+from nba_api.stats.endpoints.playergamelogs import PlayerGameLogs
 from nba_api.stats.endpoints.leaguedashteamstats import LeagueDashTeamStats
 from nba_api.stats.endpoints.playercareerstats import PlayerCareerStats
 from nba_api.stats.endpoints.leaguedashlineups import LeagueDashLineups
@@ -131,6 +136,7 @@ class PlayerPlayTypeData:
     transition: PlayTypeMetrics | None = None
     cut: PlayTypeMetrics | None = None
     off_screen: PlayTypeMetrics | None = None
+    handoff: PlayTypeMetrics | None = None
 
     # Total possessions across all play types
     total_poss: int = 0
@@ -146,6 +152,7 @@ PLAY_TYPE_MAPPING = {
     "transition": "Transition",
     "cut": "Cut",
     "off_screen": "OffScreen",
+    "handoff": "Handoff",
 }
 
 # Key defensive play types for defensive synergy data
@@ -203,6 +210,9 @@ class PlayerTrackingData:
     # Offensive tracking
     touches: int
     front_court_touches: int
+    paint_touches: int
+    post_touches: int
+    elbow_touches: int
     time_of_possession: Decimal
     avg_seconds_per_touch: Decimal
     avg_dribbles_per_touch: Decimal
@@ -961,6 +971,9 @@ class NBADataService:
                 # Offensive tracking
                 touches=touch.get("TOUCHES", 0) or 0,
                 front_court_touches=touch.get("FRONT_CT_TOUCHES", 0) or 0,
+                paint_touches=touch.get("PAINT_TOUCHES", 0) or 0,
+                post_touches=touch.get("POST_TOUCHES", 0) or 0,
+                elbow_touches=touch.get("ELBOW_TOUCHES", 0) or 0,
                 time_of_possession=Decimal(str(touch.get("TIME_OF_POSS", 0) or 0)),
                 avg_seconds_per_touch=Decimal(
                     str(touch.get("AVG_SEC_PER_TOUCH", 0) or 0)
@@ -1492,6 +1505,167 @@ class NBADataService:
         result = stats.get_normalized_dict()["LeagueDashTeamStats"]
 
         # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_player_bio_stats(self, season: str = "2024-25") -> list[dict]:
+        """Get bio data (height, weight, age, country, draft) for all players.
+
+        Uses LeagueDashPlayerBioStats for a single bulk call.
+
+        Args:
+            season: NBA season string (e.g., "2024-25")
+
+        Returns:
+            List of player bio stat dictionaries with keys:
+            PLAYER_ID, PLAYER_NAME, PLAYER_HEIGHT, PLAYER_WEIGHT,
+            AGE, COUNTRY, DRAFT_YEAR, DRAFT_ROUND, DRAFT_NUMBER, etc.
+        """
+        cache_key = f"{CacheKeyPrefix.NBA_PLAYERS.value}:bio:{season}"
+
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info("Cache hit for player bio stats (season: %s)", season)
+                return cached
+
+        logger.info("Cache miss for player bio stats (season: %s), fetching from API", season)
+        stats = self._request_with_retry(
+            LeagueDashPlayerBioStats,
+            season=season,
+        )
+        result = stats.get_normalized_dict()["LeagueDashPlayerBioStats"]
+
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_players)
+        return result
+
+    def get_speed_distance_stats(self, season: str = "2024-25") -> list[dict]:
+        """Get speed and distance tracking stats for all players (per game)."""
+        cache_key = f"{CacheKeyPrefix.NBA_TRACKING_DATA.value}:speed_distance:{season}"
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                return cached
+
+        stats = self._request_with_retry(
+            LeagueDashPtStats,
+            season=season,
+            pt_measure_type="SpeedDistance",
+            per_mode_simple="PerGame",
+            player_or_team="Player",
+        )
+        result = stats.get_normalized_dict()["LeagueDashPtStats"]
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_passing_stats(self, season: str = "2024-25") -> list[dict]:
+        """Get passing tracking stats for all players (per game)."""
+        cache_key = f"{CacheKeyPrefix.NBA_TRACKING_DATA.value}:passing:{season}"
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                return cached
+
+        stats = self._request_with_retry(
+            LeagueDashPtStats,
+            season=season,
+            pt_measure_type="Passing",
+            per_mode_simple="PerGame",
+            player_or_team="Player",
+        )
+        result = stats.get_normalized_dict()["LeagueDashPtStats"]
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_rebounding_tracking_stats(self, season: str = "2024-25") -> list[dict]:
+        """Get rebounding tracking stats for all players (per game)."""
+        cache_key = f"{CacheKeyPrefix.NBA_TRACKING_DATA.value}:rebounding:{season}"
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                return cached
+
+        stats = self._request_with_retry(
+            LeagueDashPtStats,
+            season=season,
+            pt_measure_type="Rebounding",
+            per_mode_simple="PerGame",
+            player_or_team="Player",
+        )
+        result = stats.get_normalized_dict()["LeagueDashPtStats"]
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_defender_distance_shooting(
+        self, season: str = "2024-25", distance_range: str = ""
+    ) -> list[dict]:
+        """Get shooting stats filtered by closest defender distance.
+
+        Args:
+            season: NBA season string
+            distance_range: One of "0-2 Feet - Very Tight", "2-4 Feet - Tight",
+                          "4-6 Feet - Open", "6+ Feet - Wide Open", or "" for overall
+        """
+        cache_key = f"{CacheKeyPrefix.NBA_TRACKING_DATA.value}:def_dist:{distance_range}:{season}"
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                return cached
+
+        stats = self._request_with_retry(
+            LeagueDashPlayerPtShot,
+            season=season,
+            per_mode_simple="PerGame",
+            close_def_dist_range_nullable=distance_range,
+        )
+        result = stats.get_normalized_dict()["LeagueDashPTShots"]
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_defensive_synergy_stats(
+        self, play_type: str, season: str = "2024-25"
+    ) -> list[dict]:
+        """Get defensive Synergy play type stats for all players.
+
+        Args:
+            play_type: Play type name (e.g., "Isolation", "PRBallHandler")
+            season: NBA season string
+        """
+        cache_key = f"{CacheKeyPrefix.NBA_PLAY_TYPE_STATS.value}:def:{play_type}:{season}"
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                return cached
+
+        synergy = self._request_with_retry(
+            SynergyPlayTypes,
+            season=season,
+            season_type_all_star="Regular Season",
+            play_type_nullable=play_type,
+            player_or_team_abbreviation="P",
+            type_grouping_nullable="defensive",
+        )
+        result = synergy.get_normalized_dict().get("SynergyPlayType", [])
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_player_game_logs(self, season: str = "2024-25") -> list[dict]:
+        """Get all player game logs for a season (bulk, single API call).
+
+        Returns ~30K rows — one row per player per game.
+        """
+        cache_key = f"{CacheKeyPrefix.NBA_TRACKING_DATA.value}:game_logs:{season}"
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                return cached
+
+        logger.info("Fetching player game logs for season %s", season)
+        logs = self._request_with_retry(
+            PlayerGameLogs,
+            season_nullable=season,
+        )
+        result = logs.get_normalized_dict()["PlayerGameLogs"]
         redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
         return result
 

@@ -50,4 +50,23 @@ export interface CortexPlayer {
     topLineups: Array<{ players: string[]; minutes: number; rawNet: number; ctxNet: number; oppTier: string }>
     withoutTopTeammate: { teammate: string; netRtg: number; minutes: number }
   }
+  speedDistance?: { distMiles: number; distMilesOff: number; distMilesDef: number; avgSpeed: number; avgSpeedOff: number; avgSpeedDef: number } | null
+  passing?: { passesMade: number; passesReceived: number; secondaryAst: number; potentialAst: number; astPointsCreated: number; astAdj: number; astToPassPct: number; astToPassPctAdj: number } | null
+  reboundingTracking?: { orebContestPct: number; orebChancePct: number; orebChancePctAdj: number; avgOrebDist: number; drebContestPct: number; drebChancePct: number; drebChancePctAdj: number; avgDrebDist: number; rebContestPct: number; rebChancePct: number; rebChancePctAdj: number } | null
+  defenderDistance?: Array<{ range: string; fgaFreq: number; fgPct: number; efgPct: number; fg3Pct: number }>
+  recentGames?: Array<{ gameDate: string; matchup: string; wl: string; minutes: number; pts: number; reb: number; ast: number; stl: number; blk: number; tov: number; fgPct: number; fg3Pct: number; plusMinus: number; gameScore: number }>
+  consistency?: {
+    gamesUsed: number; ptsCv: number; astCv: number; rebCv: number; gameScoreCv: number
+    gameScoreAvg: number; gameScoreStd: number; gameScoreMax: number; gameScoreMin: number
+    boomGames: number; bustGames: number; boomPct: number; bustPct: number
+    bestStreak: number; worstStreak: number; ddRate: number; tdRate: number
+    consistencyScore: number
+  } | null
+  defensivePlayTypes?: {
+    isolation: { poss: number; ppp: number; fgPct: number; tovPct: number; freq: number; percentile: number } | null
+    pnrBallHandler: { poss: number; ppp: number; fgPct: number; tovPct: number; freq: number; percentile: number } | null
+    postUp: { poss: number; ppp: number; fgPct: number; tovPct: number; freq: number; percentile: number } | null
+    spotUp: { poss: number; ppp: number; fgPct: number; tovPct: number; freq: number; percentile: number } | null
+    transition: { poss: number; ppp: number; fgPct: number; tovPct: number; freq: number; percentile: number } | null
+  } | null
 }

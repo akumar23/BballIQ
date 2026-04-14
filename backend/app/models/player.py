@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, Boolean, String
+from sqlalchemy import BigInteger, Boolean, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -14,6 +14,16 @@ class Player(Base):
     team_id: Mapped[int | None] = mapped_column(BigInteger)
     team_abbreviation: Mapped[str | None] = mapped_column(String(10))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    # Bio data
+    height: Mapped[str | None] = mapped_column(String(10))  # e.g. "6-6"
+    weight: Mapped[int | None] = mapped_column(BigInteger)  # lbs
+    jersey_number: Mapped[str | None] = mapped_column(String(5))
+    birth_date: Mapped[str | None] = mapped_column(String(20))  # ISO date string
+    country: Mapped[str | None] = mapped_column(String(50))
+    draft_year: Mapped[int | None] = mapped_column(BigInteger)
+    draft_round: Mapped[int | None] = mapped_column(BigInteger)
+    draft_number: Mapped[int | None] = mapped_column(BigInteger)
 
     game_stats = relationship("GameStats", back_populates="player")
     season_stats = relationship("SeasonStats", back_populates="player")
@@ -32,3 +42,9 @@ class Player(Base):
     all_in_one_metrics = relationship("PlayerAllInOneMetrics", back_populates="player")
     rapm_windows = relationship("PlayerRapmWindows", back_populates="player")
     big_board = relationship("PlayerBigBoard", back_populates="player")
+    speed_distance = relationship("PlayerSpeedDistance", back_populates="player")
+    passing_stats = relationship("PlayerPassingStats", back_populates="player")
+    rebounding_tracking = relationship("PlayerReboundingTracking", back_populates="player")
+    defender_distance_shooting = relationship("PlayerDefenderDistanceShooting", back_populates="player")
+    defensive_play_types = relationship("PlayerDefensivePlayTypes", back_populates="player")
+    consistency_stats = relationship("PlayerConsistencyStats", back_populates="player")

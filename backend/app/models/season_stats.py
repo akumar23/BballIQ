@@ -39,6 +39,9 @@ class SeasonStats(Base):
     # Aggregated tracking - Offensive
     total_touches: Mapped[int | None]
     total_front_court_touches: Mapped[int | None]
+    total_paint_touches: Mapped[int | None]
+    total_post_touches: Mapped[int | None]
+    total_elbow_touches: Mapped[int | None]
     total_time_of_possession: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
     avg_points_per_touch: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
 

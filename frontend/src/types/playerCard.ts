@@ -82,17 +82,6 @@ export interface ApiCardPlayType {
   ppp_percentile: number | null
 }
 
-export interface ApiCardPlayTypes {
-  isolation: ApiCardPlayType | null
-  pnr_ball_handler: ApiCardPlayType | null
-  pnr_roll_man: ApiCardPlayType | null
-  post_up: ApiCardPlayType | null
-  spot_up: ApiCardPlayType | null
-  transition: ApiCardPlayType | null
-  cut: ApiCardPlayType | null
-  off_screen: ApiCardPlayType | null
-}
-
 export interface ApiCardShotZone {
   zone: string
   fga_per_game: string | null
@@ -241,12 +230,32 @@ export interface ApiCardChampionship {
   playoff_projection: ApiCardPlayoffProjection | null
 }
 
+export interface ApiCardPlayTypes {
+  isolation: ApiCardPlayType | null
+  pnr_ball_handler: ApiCardPlayType | null
+  pnr_roll_man: ApiCardPlayType | null
+  post_up: ApiCardPlayType | null
+  spot_up: ApiCardPlayType | null
+  transition: ApiCardPlayType | null
+  cut: ApiCardPlayType | null
+  off_screen: ApiCardPlayType | null
+  handoff: ApiCardPlayType | null
+}
+
 export interface PlayerCardData {
   id: number
   nba_id: number
   name: string
   position: string | null
   team_abbreviation: string | null
+  height: string | null
+  weight: number | null
+  jersey_number: string | null
+  age: string | null
+  country: string | null
+  draft_year: number | null
+  draft_round: number | null
+  draft_number: number | null
   season: string
   traditional: ApiCardTraditional | null
   advanced: ApiCardAdvanced | null
@@ -264,4 +273,108 @@ export interface PlayerCardData {
   portability: ApiCardPortability | null
   championship: ApiCardChampionship | null
   lineup_context: ApiCardLineupContext | null
+  speed_distance: ApiCardSpeedDistance | null
+  passing: ApiCardPassing | null
+  rebounding_tracking: ApiCardReboundingTracking | null
+  defender_distance: ApiCardDefenderDistanceEntry[]
+  defensive_play_types: ApiCardDefensivePlayTypes | null
+  recent_games: ApiCardGameLog[]
+  consistency: ApiCardConsistency | null
+}
+
+export interface ApiCardGameLog {
+  game_date: string | null
+  matchup: string | null
+  wl: string | null
+  minutes: string | null
+  pts: number | null
+  reb: number | null
+  ast: number | null
+  stl: number | null
+  blk: number | null
+  tov: number | null
+  fg_pct: string | null
+  fg3_pct: string | null
+  plus_minus: number | null
+  game_score: string | null
+}
+
+export interface ApiCardConsistency {
+  games_used: number | null
+  pts_cv: string | null
+  ast_cv: string | null
+  reb_cv: string | null
+  game_score_cv: string | null
+  game_score_avg: string | null
+  game_score_std: string | null
+  game_score_max: string | null
+  game_score_min: string | null
+  boom_games: number | null
+  bust_games: number | null
+  boom_pct: string | null
+  bust_pct: string | null
+  best_streak: number | null
+  worst_streak: number | null
+  dd_rate: string | null
+  td_rate: string | null
+  consistency_score: number | null
+}
+
+export interface ApiCardSpeedDistance {
+  dist_miles: string | null
+  dist_miles_off: string | null
+  dist_miles_def: string | null
+  avg_speed: string | null
+  avg_speed_off: string | null
+  avg_speed_def: string | null
+}
+
+export interface ApiCardPassing {
+  passes_made: string | null
+  passes_received: string | null
+  secondary_ast: string | null
+  potential_ast: string | null
+  ast_points_created: string | null
+  ast_adj: string | null
+  ast_to_pass_pct: string | null
+  ast_to_pass_pct_adj: string | null
+}
+
+export interface ApiCardReboundingTracking {
+  oreb_contest_pct: string | null
+  oreb_chance_pct: string | null
+  oreb_chance_pct_adj: string | null
+  avg_oreb_dist: string | null
+  dreb_contest_pct: string | null
+  dreb_chance_pct: string | null
+  dreb_chance_pct_adj: string | null
+  avg_dreb_dist: string | null
+  reb_contest_pct: string | null
+  reb_chance_pct: string | null
+  reb_chance_pct_adj: string | null
+}
+
+export interface ApiCardDefenderDistanceEntry {
+  range: string
+  fga_freq: string | null
+  fg_pct: string | null
+  efg_pct: string | null
+  fg3_pct: string | null
+}
+
+export interface ApiCardDefensivePlayType {
+  poss: number | null
+  ppp: string | null
+  fg_pct: string | null
+  tov_pct: string | null
+  freq: string | null
+  percentile: string | null
+}
+
+export interface ApiCardDefensivePlayTypes {
+  isolation: ApiCardDefensivePlayType | null
+  pnr_ball_handler: ApiCardDefensivePlayType | null
+  post_up: ApiCardDefensivePlayType | null
+  spot_up: ApiCardDefensivePlayType | null
+  transition: ApiCardDefensivePlayType | null
 }
