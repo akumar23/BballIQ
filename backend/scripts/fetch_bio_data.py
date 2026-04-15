@@ -28,17 +28,9 @@ from app.services.rate_limiter import (
     nba_api_circuit_breaker,
 )
 from app.services.redis_cache import redis_cache
+from scripts.shared import setup_logging
 
 logger = logging.getLogger(__name__)
-
-
-def setup_logging(verbose: bool = False) -> None:
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)],
-    )
 
 
 def fetch_and_store_bio_data(

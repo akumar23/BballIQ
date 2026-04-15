@@ -35,48 +35,10 @@ from app.services.rate_limiter import (
     nba_api_circuit_breaker,
 )
 from app.services.redis_cache import redis_cache
-
+from scripts.shared import create_tables, setup_logging
 
 # Configure logging
 logger = logging.getLogger(__name__)
-
-
-def setup_logging(verbose: bool = False) -> None:
-    """Configure logging for the script."""
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-        ],
-    )
-    logging.getLogger("app.services.rate_limiter").setLevel(level)
-    logging.getLogger("app.services.nba_data").setLevel(level)
-
-
-def create_tables() -> None:
-    """Run Alembic migrations to create/update database tables."""
-    import subprocess
-
-    print("Running database migrations...")
-    logger.info("Running database migrations...")
-    try:
-        result = subprocess.run(
-            ["alembic", "upgrade", "head"],
-            cwd=Path(__file__).parent.parent,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        if result.stdout:
-            print(result.stdout)
-        print("Done.")
-        logger.info("Database migrations completed successfully")
-    except subprocess.CalledProcessError as e:
-        logger.error("Migration failed: %s", e.stderr)
-        print(f"[ERROR] Migration failed: {e.stderr}")
-        raise
 
 
 def progress_callback(team_idx: int, total_teams: int, team_name: str) -> None:

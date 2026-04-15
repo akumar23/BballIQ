@@ -5,13 +5,15 @@ export interface CortexPlayer {
   position: string
   age: number
   number: number
+  heightInches?: number | null
+  college?: string | null
   mpg: number
   traditional: { ppg: number; rpg: number; apg: number; spg: number; bpg: number; fgPct: number; threePct: number; ftPct: number; tov: number }
   advanced: { per: number; ts: number; ws48: number; bpm: number; vorp: number; ortg: number; drtg: number; usg: number; ows: number; dws: number }
   impact: {
     onOff: { onORtg: number; offORtg: number; onDRtg: number; offDRtg: number; netSwing: number }
     luck: { xWins: number; actualWins: number; clutchEPA: number; garbageTimePts: number }
-    rapm: number; rpm: number; epm: number; raptor: number; lebron: number; darko: number
+    rapm: number; rpm: number; epm: number; lebron: number; darko: number; laker: number; mamba: number
     contextualized: {
       rawNetRtg: number; contextualizedNetRtg: number; percentile: number
       adjustments: Array<{ name: string; value: number; cumulative: number; explanation: string }>
@@ -53,7 +55,16 @@ export interface CortexPlayer {
   speedDistance?: { distMiles: number; distMilesOff: number; distMilesDef: number; avgSpeed: number; avgSpeedOff: number; avgSpeedDef: number } | null
   passing?: { passesMade: number; passesReceived: number; secondaryAst: number; potentialAst: number; astPointsCreated: number; astAdj: number; astToPassPct: number; astToPassPctAdj: number } | null
   reboundingTracking?: { orebContestPct: number; orebChancePct: number; orebChancePctAdj: number; avgOrebDist: number; drebContestPct: number; drebChancePct: number; drebChancePctAdj: number; avgDrebDist: number; rebContestPct: number; rebChancePct: number; rebChancePctAdj: number } | null
-  defenderDistance?: Array<{ range: string; fgaFreq: number; fgPct: number; efgPct: number; fg3Pct: number }>
+  defenderDistance?: Array<{ range: string; fgaFreq: number; fgPct: number; efgPct: number; fg3Pct: number; fg2aFreq: number; fg2Pct: number; fg3aFreq: number }>
+  touchesBreakdown?: {
+    elbow: { touches: number; fga: number; fgPct: number; fta: number; pts: number; passes: number; ast: number; tov: number; fouls: number; ptsPerTouch: number } | null
+    post: { touches: number; fga: number; fgPct: number; fta: number; pts: number; passes: number; ast: number; tov: number; fouls: number; ptsPerTouch: number } | null
+    paint: { touches: number; fga: number; fgPct: number; fta: number; pts: number; passes: number; ast: number; tov: number; fouls: number; ptsPerTouch: number } | null
+  } | null
+  opponentShooting?: {
+    games: number
+    buckets: Array<{ label: string; defendedFga: number; defendedFgPct: number; normalFgPct: number; pctPlusminus: number }>
+  } | null
   recentGames?: Array<{ gameDate: string; matchup: string; wl: string; minutes: number; pts: number; reb: number; ast: number; stl: number; blk: number; tov: number; fgPct: number; fg3Pct: number; plusMinus: number; gameScore: number }>
   consistency?: {
     gamesUsed: number; ptsCv: number; astCv: number; rebCv: number; gameScoreCv: number

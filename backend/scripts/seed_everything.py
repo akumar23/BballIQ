@@ -22,6 +22,8 @@ import sys
 import time
 from pathlib import Path
 
+from scripts.shared import generate_seasons
+
 ROOT = Path(__file__).parent.parent  # backend/
 
 CURRENT_SEASON = "2024-25"
@@ -104,16 +106,6 @@ PHASES = [
 
 ALL_PHASE_KEYS = [p["key"] for p in PHASES]
 
-
-def generate_seasons(from_season: str, to_season: str) -> list[str]:
-    """Generate list of NBA season strings from oldest to newest."""
-    start = int(from_season.split("-")[0])
-    end = int(to_season.split("-")[0])
-    seasons = []
-    for year in range(start, end + 1):
-        short = str(year + 1)[-2:]
-        seasons.append(f"{year}-{short}")
-    return seasons
 
 
 def run(label: str, cmd: list[str], allow_fail: bool = False) -> bool:

@@ -21,6 +21,8 @@ import sys
 import time
 from pathlib import Path
 
+from scripts.shared import generate_seasons
+
 ROOT = Path(__file__).parent.parent
 
 PHASES = [
@@ -57,16 +59,6 @@ PHASES = [
 ]
 
 ALL_KEYS = [p["key"] for p in PHASES]
-
-
-def generate_seasons(from_season: str, to_season: str) -> list[str]:
-    start = int(from_season.split("-")[0])
-    end = int(to_season.split("-")[0])
-    seasons = []
-    for year in range(start, end + 1):
-        short = str(year + 1)[-2:]
-        seasons.append(f"{year}-{short}")
-    return seasons
 
 
 def run_phase(module: str, season: str, label: str) -> bool:

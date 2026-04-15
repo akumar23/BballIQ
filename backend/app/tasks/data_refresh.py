@@ -613,8 +613,6 @@ def refresh_advanced_data(self, season: str | None = None) -> dict:
     Returns:
         dict with status and player count
     """
-    from decimal import Decimal
-
     from app.models import Player
     from app.models.advanced_stats import PlayerAdvancedStats
     from app.models.clutch_stats import PlayerClutchStats as PlayerClutchStatsModel
@@ -622,25 +620,10 @@ def refresh_advanced_data(self, season: str | None = None) -> dict:
     from app.models.shot_zones import PlayerShotZones as PlayerShotZonesModel
     from app.services.nba_data import NBADataService
     from app.services.rate_limiter import CircuitBreakerError, RateLimitError
+    from scripts.shared import safe_decimal, safe_int
 
     season = season or get_current_season()
     logger.info("Starting advanced data refresh for season %s", season)
-
-    def safe_decimal(value, default=None):
-        if value is None:
-            return default
-        try:
-            return Decimal(str(value))
-        except Exception:
-            return default
-
-    def safe_int(value, default=None):
-        if value is None:
-            return default
-        try:
-            return int(value)
-        except (ValueError, TypeError):
-            return default
 
     db = SessionLocal()
     try:

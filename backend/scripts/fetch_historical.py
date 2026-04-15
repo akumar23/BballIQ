@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 """Fetch historical NBA data for multiple past seasons.
 
-Orchestrates all fetch scripts across seasons 2013-14 through 2023-24.
-Must be run after the current season (2024-25) is already seeded since
-it creates player records that past seasons reference.
+DEPRECATED: Use ``seed_everything.py --skip-current`` instead, which supports
+all 13 phases (this script only covers 6) and the same CLI flags::
 
-Usage:
-    python -m scripts.fetch_historical
-    python -m scripts.fetch_historical --from-season 2020-21
-    python -m scripts.fetch_historical --only phase1 phase2 advanced
-    python -m scripts.fetch_historical --dry-run
+    python -m scripts.seed_everything --skip-current
+    python -m scripts.seed_everything --skip-current --from-season 2020-21
+    python -m scripts.seed_everything --skip-current --only phase1 phase2
+
+This script is kept for backward compatibility but will be removed in a
+future release.
 """
 
 import argparse
 import subprocess
 import sys
 import time
+import warnings
 from pathlib import Path
+
+from scripts.shared import generate_seasons
 
 ROOT = Path(__file__).parent.parent
 
@@ -63,16 +66,6 @@ PHASES = [
 DEFAULT_END = "2023-24"
 
 
-def generate_seasons(from_season: str, to_season: str) -> list[str]:
-    """Generate list of NBA season strings."""
-    start = int(from_season.split("-")[0])
-    end = int(to_season.split("-")[0])
-    seasons = []
-    for year in range(start, end + 1):
-        short = str(year + 1)[-2:]
-        seasons.append(f"{year}-{short}")
-    return seasons
-
 
 def run_phase(label: str, cmd: list[str], season: str) -> bool:
     """Run a single phase for a single season."""
@@ -91,6 +84,13 @@ def run_phase(label: str, cmd: list[str], season: str) -> bool:
 
 
 def main():
+    warnings.warn(
+        "fetch_historical.py is deprecated. "
+        "Use 'python -m scripts.seed_everything --skip-current' instead "
+        "(supports all 13 phases vs 6 here).",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     parser = argparse.ArgumentParser(description="Fetch historical NBA data")
     parser.add_argument(
         "--from-season", default="2013-14",

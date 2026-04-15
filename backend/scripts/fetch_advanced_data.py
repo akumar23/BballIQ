@@ -20,7 +20,6 @@ Usage:
 import argparse
 import logging
 import sys
-from decimal import Decimal
 from pathlib import Path
 
 # Add parent directory to path for imports
@@ -41,110 +40,16 @@ from app.services.rate_limiter import (
     nba_api_circuit_breaker,
 )
 from app.services.redis_cache import redis_cache
-
+from scripts.shared import (
+    create_tables,
+    generate_seasons as generate_season_range,
+    safe_decimal,
+    safe_int,
+    setup_logging,
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
-
-
-def setup_logging(verbose: bool = False) -> None:
-    """Configure logging for the script."""
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-        ],
-    )
-    logging.getLogger("app.services.rate_limiter").setLevel(level)
-    logging.getLogger("app.services.nba_data").setLevel(level)
-
-
-def create_tables() -> None:
-    """Run Alembic migrations to create/update database tables."""
-    import subprocess
-
-    print("Running database migrations...")
-    logger.info("Running database migrations...")
-    try:
-        result = subprocess.run(
-            ["alembic", "upgrade", "head"],
-            cwd=Path(__file__).parent.parent,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        if result.stdout:
-            print(result.stdout)
-        print("Done.")
-        logger.info("Database migrations completed successfully")
-    except subprocess.CalledProcessError as e:
-        logger.error("Migration failed: %s", e.stderr)
-        print(f"[ERROR] Migration failed: {e.stderr}")
-        raise
-
-
-def generate_season_range(from_season: str, to_season: str) -> list[str]:
-    """Generate a list of NBA season strings between two seasons (inclusive).
-
-    Args:
-        from_season: Start season in "YYYY-YY" format (e.g., "2020-21")
-        to_season: End season in "YYYY-YY" format (e.g., "2024-25")
-
-    Returns:
-        Ordered list of season strings from oldest to newest
-    """
-    def parse_start_year(season: str) -> int:
-        return int(season.split("-")[0])
-
-    start = parse_start_year(from_season)
-    end = parse_start_year(to_season)
-
-    if start > end:
-        raise ValueError(f"from-season {from_season} must be before to-season {to_season}")
-
-    seasons = []
-    for year in range(start, end + 1):
-        short_year = str(year + 1)[-2:]
-        seasons.append(f"{year}-{short_year}")
-    return seasons
-
-
-def safe_decimal(value, default=None) -> Decimal | None:
-    """Safely convert a value to Decimal, returning default on failure.
-
-    Args:
-        value: Value to convert
-        default: Default value if conversion fails
-
-    Returns:
-        Decimal value or default
-    """
-    if value is None:
-        return default
-    try:
-        return Decimal(str(value))
-    except Exception:
-        return default
-
-
-def safe_int(value, default=None) -> int | None:
-    """Safely convert a value to int, returning default on failure.
-
-    Args:
-        value: Value to convert
-        default: Default value if conversion fails
-
-    Returns:
-        int value or default
-    """
-    if value is None:
-        return default
-    try:
-        return int(value)
-    except (ValueError, TypeError):
-        return default
 
 
 def fetch_and_store_advanced_data(

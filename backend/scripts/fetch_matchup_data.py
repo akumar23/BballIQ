@@ -14,7 +14,6 @@ Usage:
 import argparse
 import logging
 import sys
-from decimal import Decimal
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -32,41 +31,9 @@ from app.services.rate_limiter import (
     nba_api_circuit_breaker,
 )
 from app.services.redis_cache import redis_cache
-
+from scripts.shared import safe_decimal, safe_int, setup_logging
 
 logger = logging.getLogger(__name__)
-
-
-def setup_logging(verbose: bool = False) -> None:
-    """Configure logging for the script."""
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)],
-    )
-    logging.getLogger("app.services.rate_limiter").setLevel(level)
-    logging.getLogger("app.services.nba_data").setLevel(level)
-
-
-def safe_decimal(value, default=None) -> Decimal | None:
-    """Safely convert a value to Decimal."""
-    if value is None:
-        return default
-    try:
-        return Decimal(str(value))
-    except Exception:
-        return default
-
-
-def safe_int(value, default=None) -> int | None:
-    """Safely convert a value to int."""
-    if value is None:
-        return default
-    try:
-        return int(value)
-    except (ValueError, TypeError):
-        return default
 
 
 def get_qualifying_players(

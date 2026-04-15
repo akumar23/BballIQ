@@ -14,7 +14,6 @@ import argparse
 import logging
 import statistics
 import sys
-from decimal import Decimal
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -31,32 +30,12 @@ from app.services.rate_limiter import (
     RateLimitError,
     nba_api_circuit_breaker,
 )
+from scripts.shared import safe_decimal as _d, safe_int as _i, setup_logging
 
 logger = logging.getLogger(__name__)
 
 # Minimum games for consistency calculation
 MIN_GAMES = 15
-
-
-def setup_logging(verbose: bool = False) -> None:
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)],
-    )
-
-
-def _d(val) -> Decimal | None:
-    if val is None:
-        return None
-    return Decimal(str(val))
-
-
-def _i(val) -> int | None:
-    if val is None:
-        return None
-    return int(val)
 
 
 def game_score(row: dict) -> float:

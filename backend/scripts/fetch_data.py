@@ -40,53 +40,14 @@ from app.services.rate_limiter import (
     nba_api_circuit_breaker,
 )
 from app.services.redis_cache import redis_cache
-
+from scripts.shared import (
+    create_tables,
+    generate_seasons as generate_season_range,
+    setup_logging,
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
-
-
-def setup_logging(verbose: bool = False) -> None:
-    """Configure logging for the script.
-
-    Args:
-        verbose: If True, set DEBUG level; otherwise INFO
-    """
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-        ],
-    )
-    # Also configure the rate_limiter logger
-    logging.getLogger("app.services.rate_limiter").setLevel(level)
-    logging.getLogger("app.services.nba_data").setLevel(level)
-
-
-def create_tables() -> None:
-    """Run Alembic migrations to create/update database tables."""
-    import subprocess
-
-    print("Running database migrations...")
-    logger.info("Running database migrations...")
-    try:
-        result = subprocess.run(
-            ["alembic", "upgrade", "head"],
-            cwd=Path(__file__).parent.parent,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        if result.stdout:
-            print(result.stdout)
-        print("Done.")
-        logger.info("Database migrations completed successfully")
-    except subprocess.CalledProcessError as e:
-        logger.error("Migration failed: %s", e.stderr)
-        print(f"[ERROR] Migration failed: {e.stderr}")
-        raise
 
 
 def fetch_tracking_data_with_recovery(
@@ -516,31 +477,6 @@ def calculate_percentiles(season: str, db: Session) -> None:
     print(f"  Percentiles calculated for {len(stats)} players")
     logger.info("Percentiles calculated for %d players", len(stats))
 
-
-def generate_season_range(from_season: str, to_season: str) -> list[str]:
-    """Generate a list of NBA season strings between two seasons (inclusive).
-
-    Args:
-        from_season: Start season in "YYYY-YY" format (e.g., "2020-21")
-        to_season: End season in "YYYY-YY" format (e.g., "2024-25")
-
-    Returns:
-        Ordered list of season strings from oldest to newest
-    """
-    def parse_start_year(season: str) -> int:
-        return int(season.split("-")[0])
-
-    start = parse_start_year(from_season)
-    end = parse_start_year(to_season)
-
-    if start > end:
-        raise ValueError(f"from-season {from_season} must be before to-season {to_season}")
-
-    seasons = []
-    for year in range(start, end + 1):
-        short_year = str(year + 1)[-2:]
-        seasons.append(f"{year}-{short_year}")
-    return seasons
 
 
 def print_circuit_breaker_status() -> None:
