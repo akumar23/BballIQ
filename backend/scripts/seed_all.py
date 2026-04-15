@@ -1,23 +1,24 @@
 #!/usr/bin/env python3
 """Master seed script — runs migrations and all data fetch scripts in order.
 
-This is the single entrypoint for populating a fresh database with all
-NBA stats data. Designed to run inside Docker via:
+DEPRECATED: Use ``seed_everything.py`` instead, which covers all 13 phases
+(this script only covers 8) and supports multi-season seeding::
 
-    docker compose --profile seed run --rm seed
+    python -m scripts.seed_everything                          # current + historical
+    python -m scripts.seed_everything --from-season 2024-25    # current season only
+    python -m scripts.seed_everything --only phase1 phase2
 
-Or locally:
+Docker: ``docker compose --profile seed-all run --rm seed-all``
 
-    python -m scripts.seed_all
-    python -m scripts.seed_all --season 2024-25
-    python -m scripts.seed_all --skip-migrations
-    python -m scripts.seed_all --only phase1 phase2 advanced
+This script is kept for backward compatibility but will be removed in a
+future release.
 """
 
 import argparse
 import subprocess
 import sys
 import time
+import warnings
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent  # backend/
@@ -42,6 +43,13 @@ def run(label: str, cmd: list[str], allow_fail: bool = False) -> bool:
 
 
 def main():
+    warnings.warn(
+        "seed_all.py is deprecated. "
+        "Use 'python -m scripts.seed_everything' instead "
+        "(supports all 13 phases vs 8 here, plus multi-season seeding).",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     parser = argparse.ArgumentParser(description="Seed all NBA stats data")
     parser.add_argument("--season", default="2024-25", help="NBA season (default: 2024-25)")
     parser.add_argument("--skip-migrations", action="store_true", help="Skip Alembic migrations")

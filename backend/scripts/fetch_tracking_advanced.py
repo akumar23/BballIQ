@@ -16,7 +16,6 @@ Usage:
 import argparse
 import logging
 import sys
-from decimal import Decimal
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -24,19 +23,18 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
-from app.models import Player
 from app.models.speed_distance import PlayerSpeedDistance
 from app.models.passing_stats import PlayerPassingStats
 from app.models.rebounding_tracking import PlayerReboundingTracking
 from app.models.defender_distance_shooting import PlayerDefenderDistanceShooting
 from app.models.defensive_play_types import PlayerDefensivePlayTypes
-from app.services.nba_data import NBADataService, DEFENSIVE_PLAY_TYPE_MAPPING
+from app.services.nba_data import NBADataService
 from app.services.rate_limiter import (
     CircuitBreakerError,
     RateLimitError,
     nba_api_circuit_breaker,
 )
-from app.services.redis_cache import redis_cache
+from scripts.shared import build_nba_id_lookup, safe_decimal as _d, setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -57,29 +55,6 @@ DEF_PLAY_TYPE_FIELDS = {
     "transition": "Transition",
 }
 
-
-def setup_logging(verbose: bool = False) -> None:
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)],
-    )
-
-
-def _d(val) -> Decimal | None:
-    """Convert API value to Decimal or None."""
-    if val is None:
-        return None
-    return Decimal(str(val))
-
-
-def _build_nba_id_lookup(db: Session) -> dict[int, int]:
-    """Build nba_id -> player.id lookup."""
-    return {
-        p.nba_id: p.id
-        for p in db.query(Player.nba_id, Player.id).all()
-    }
 
 
 def fetch_speed_distance(service: NBADataService, season: str, db: Session, lookup: dict) -> int:
@@ -344,7 +319,7 @@ def fetch_and_store_all(
     print("-" * 50)
 
     service = NBADataService(bypass_cache=bypass_cache)
-    lookup = _build_nba_id_lookup(db)
+    lookup = build_nba_id_lookup(db)
     print(f"  Player lookup: {len(lookup)} players")
 
     totals = {}

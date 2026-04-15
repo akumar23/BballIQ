@@ -10,6 +10,24 @@ from app.schemas.leaderboard import SeasonsList
 router = APIRouter()
 
 
+def _build_player_list(player: Player, stats: SeasonStats) -> PlayerList:
+    """Build a PlayerList response from a Player and their SeasonStats."""
+    return PlayerList(
+        id=player.id,
+        nba_id=player.nba_id,
+        name=player.name,
+        position=player.position,
+        team_abbreviation=player.team_abbreviation,
+        metrics={
+            "offensive_metric": stats.offensive_metric,
+            "defensive_metric": stats.defensive_metric,
+            "overall_metric": stats.overall_metric,
+            "offensive_percentile": stats.offensive_percentile,
+            "defensive_percentile": stats.defensive_percentile,
+        },
+    )
+
+
 @router.get("/offensive", response_model=list[PlayerList])
 async def get_offensive_leaderboard(
     season: str = Query(default="2024-25"),
@@ -27,23 +45,7 @@ async def get_offensive_leaderboard(
         .all()
     )
 
-    return [
-        PlayerList(
-            id=player.id,
-            nba_id=player.nba_id,
-            name=player.name,
-            position=player.position,
-            team_abbreviation=player.team_abbreviation,
-            metrics={
-                "offensive_metric": stats.offensive_metric,
-                "defensive_metric": stats.defensive_metric,
-                "overall_metric": stats.overall_metric,
-                "offensive_percentile": stats.offensive_percentile,
-                "defensive_percentile": stats.defensive_percentile,
-            },
-        )
-        for player, stats in results
-    ]
+    return [_build_player_list(player, stats) for player, stats in results]
 
 
 @router.get("/defensive", response_model=list[PlayerList])
@@ -63,23 +65,7 @@ async def get_defensive_leaderboard(
         .all()
     )
 
-    return [
-        PlayerList(
-            id=player.id,
-            nba_id=player.nba_id,
-            name=player.name,
-            position=player.position,
-            team_abbreviation=player.team_abbreviation,
-            metrics={
-                "offensive_metric": stats.offensive_metric,
-                "defensive_metric": stats.defensive_metric,
-                "overall_metric": stats.overall_metric,
-                "offensive_percentile": stats.offensive_percentile,
-                "defensive_percentile": stats.defensive_percentile,
-            },
-        )
-        for player, stats in results
-    ]
+    return [_build_player_list(player, stats) for player, stats in results]
 
 
 @router.get("/per-game", response_model=list[PlayerPerGameStats])
@@ -140,23 +126,7 @@ async def get_overall_leaderboard(
         .all()
     )
 
-    return [
-        PlayerList(
-            id=player.id,
-            nba_id=player.nba_id,
-            name=player.name,
-            position=player.position,
-            team_abbreviation=player.team_abbreviation,
-            metrics={
-                "offensive_metric": stats.offensive_metric,
-                "defensive_metric": stats.defensive_metric,
-                "overall_metric": stats.overall_metric,
-                "offensive_percentile": stats.offensive_percentile,
-                "defensive_percentile": stats.defensive_percentile,
-            },
-        )
-        for player, stats in results
-    ]
+    return [_build_player_list(player, stats) for player, stats in results]
 
 @router.get("/seasons", response_model=list[SeasonsList])
 async def get_leaderboard_seasons(

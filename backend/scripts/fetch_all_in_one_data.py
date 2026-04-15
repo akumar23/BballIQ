@@ -13,7 +13,6 @@ Usage:
 import argparse
 import logging
 import sys
-from decimal import Decimal
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -30,7 +29,7 @@ from app.services.all_in_one_scraper import (
     build_name_lookup,
     match_player,
 )
-
+from scripts.shared import setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -43,16 +42,6 @@ SOURCE_FIELD_MAP = {
     "LEBRON": ("lebron", "lebron_offense", "lebron_defense"),
     "RPM": ("rpm", "rpm_offense", "rpm_defense"),
 }
-
-
-def setup_logging(verbose: bool = False) -> None:
-    """Configure logging."""
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)],
-    )
 
 
 def get_all_players(db: Session) -> list[tuple[int, str]]:

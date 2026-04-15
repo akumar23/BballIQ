@@ -11,9 +11,10 @@ export default function ImpactTab({ player }: { player: CortexPlayer }) {
     { name: 'RAPM', value: player.impact.rapm },
     { name: 'RPM', value: player.impact.rpm },
     { name: 'EPM', value: player.impact.epm },
-    { name: 'RAPTOR', value: player.impact.raptor },
     { name: 'LEBRON', value: player.impact.lebron },
     { name: 'DARKO', value: player.impact.darko },
+    { name: 'LAKER', value: player.impact.laker },
+    { name: 'MAMBA', value: player.impact.mamba },
   ]
 
   return (

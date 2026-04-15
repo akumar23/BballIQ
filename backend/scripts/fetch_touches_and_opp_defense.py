@@ -12,7 +12,6 @@ Usage:
 import argparse
 import logging
 import sys
-from decimal import Decimal
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -20,7 +19,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
-from app.models import Player
 from app.models.opponent_shooting import PlayerOpponentShooting
 from app.models.touches_breakdown import PlayerTouchesBreakdown
 from app.services.nba_data import NBADataService
@@ -29,6 +27,7 @@ from app.services.rate_limiter import (
     RateLimitError,
     nba_api_circuit_breaker,
 )
+from scripts.shared import build_nba_id_lookup, safe_decimal as _d, setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -59,24 +58,6 @@ TOUCH_KINDS = (
     ("paint_touch", "PAINT_TOUCH", "PAINT_TOUCHES"),
 )
 
-
-def setup_logging(verbose: bool = False) -> None:
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)],
-    )
-
-
-def _d(val) -> Decimal | None:
-    if val is None:
-        return None
-    return Decimal(str(val))
-
-
-def _build_nba_id_lookup(db: Session) -> dict[int, int]:
-    return {p.nba_id: p.id for p in db.query(Player.nba_id, Player.id).all()}
 
 
 def _apply_touch_row(
@@ -265,7 +246,7 @@ def fetch_and_store_all(
     print("-" * 50)
 
     service = NBADataService(bypass_cache=bypass_cache)
-    lookup = _build_nba_id_lookup(db)
+    lookup = build_nba_id_lookup(db)
     print(f"  Player lookup: {len(lookup)} players")
 
     totals = {

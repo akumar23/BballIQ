@@ -21,7 +21,6 @@ import argparse
 import logging
 import sys
 import time
-from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -39,38 +38,12 @@ from app.models.peak_rapm import PeakRapm
 from app.models.rapm_windows import PlayerRapmWindows
 from app.models.raptor_history import RaptorHistory
 from app.models.six_factor_rapm import SixFactorRapm
+from scripts.shared import build_nba_id_lookup, safe_decimal, safe_int, setup_logging
 
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://www.nbarapm.com"
 REQUEST_TIMEOUT = 60
-
-
-def setup_logging(verbose: bool = False) -> None:
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)],
-    )
-
-
-def safe_decimal(value, default=None) -> Decimal | None:
-    if value is None or value == "":
-        return default
-    try:
-        return Decimal(str(value))
-    except (InvalidOperation, ValueError, TypeError):
-        return default
-
-
-def safe_int(value, default=None) -> int | None:
-    if value is None or value == "":
-        return default
-    try:
-        return int(float(value))
-    except (ValueError, TypeError):
-        return default
 
 
 def fetch_json(client: httpx.Client, endpoint: str) -> list[dict]:
@@ -82,11 +55,6 @@ def fetch_json(client: httpx.Client, endpoint: str) -> list[dict]:
     logger.info("Fetched %d records from %s", len(data), endpoint)
     return data
 
-
-def build_nba_id_lookup(db: Session) -> dict[int, int]:
-    """Build nba_id -> player.id lookup from database."""
-    players = db.query(Player.id, Player.nba_id).all()
-    return {p.nba_id: p.id for p in players}
 
 
 # ---------------------------------------------------------------------------

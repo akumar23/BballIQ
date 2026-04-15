@@ -162,15 +162,18 @@ export interface ApiCardAllInOne {
   epm: string | null
   epm_offense: string | null
   epm_defense: string | null
-  raptor: string | null
-  raptor_offense: string | null
-  raptor_defense: string | null
   lebron: string | null
   lebron_offense: string | null
   lebron_defense: string | null
   darko: string | null
   darko_offense: string | null
   darko_defense: string | null
+  laker: string | null
+  laker_offense: string | null
+  laker_defense: string | null
+  mamba: string | null
+  mamba_offense: string | null
+  mamba_defense: string | null
 }
 
 export interface ApiCardMatchup {
@@ -242,6 +245,38 @@ export interface ApiCardPlayTypes {
   handoff: ApiCardPlayType | null
 }
 
+export interface ApiCardTouchKind {
+  touches: string | null
+  fga: string | null
+  fg_pct: string | null
+  fta: string | null
+  pts: string | null
+  passes: string | null
+  ast: string | null
+  tov: string | null
+  fouls: string | null
+  pts_per_touch: string | null
+}
+
+export interface ApiCardTouchesBreakdown {
+  elbow: ApiCardTouchKind | null
+  post: ApiCardTouchKind | null
+  paint: ApiCardTouchKind | null
+}
+
+export interface ApiCardOpponentShootingBucket {
+  label: string
+  defended_fga: string | null
+  defended_fg_pct: string | null
+  normal_fg_pct: string | null
+  pct_plusminus: string | null
+}
+
+export interface ApiCardOpponentShooting {
+  games: number | null
+  buckets: ApiCardOpponentShootingBucket[]
+}
+
 export interface PlayerCardData {
   id: number
   nba_id: number
@@ -249,10 +284,12 @@ export interface PlayerCardData {
   position: string | null
   team_abbreviation: string | null
   height: string | null
+  height_inches: number | null
   weight: number | null
   jersey_number: string | null
   age: string | null
   country: string | null
+  college: string | null
   draft_year: number | null
   draft_round: number | null
   draft_number: number | null
@@ -277,6 +314,8 @@ export interface PlayerCardData {
   passing: ApiCardPassing | null
   rebounding_tracking: ApiCardReboundingTracking | null
   defender_distance: ApiCardDefenderDistanceEntry[]
+  touches_breakdown: ApiCardTouchesBreakdown | null
+  opponent_shooting: ApiCardOpponentShooting | null
   defensive_play_types: ApiCardDefensivePlayTypes | null
   recent_games: ApiCardGameLog[]
   consistency: ApiCardConsistency | null
@@ -360,6 +399,9 @@ export interface ApiCardDefenderDistanceEntry {
   fg_pct: string | null
   efg_pct: string | null
   fg3_pct: string | null
+  fg2a_freq: string | null
+  fg2_pct: string | null
+  fg3a_freq: string | null
 }
 
 export interface ApiCardDefensivePlayType {

@@ -34,11 +34,6 @@ function formatPercent(value: number | null): string {
   return `${(value * 100).toFixed(1)}%`
 }
 
-function formatFrequency(value: number | null): string {
-  if (value === null) return '—'
-  return `${(value * 100).toFixed(1)}%`
-}
-
 function PPPBadge({ ppp, percentile }: { ppp: number | null; percentile: number | null }) {
   if (ppp === null) return <span className="text-gray-400">—</span>
 
@@ -89,7 +84,7 @@ function PlayerRow({ entry, rank, sortBy }: { entry: PlayTypeLeaderboardEntry; r
       </td>
       <td className={cn('px-4 py-3 text-center', sortBy === 'frequency' && 'bg-yellow-50')}>
         <span className={cn('text-sm', sortBy === 'frequency' ? 'font-bold text-yellow-700' : 'text-gray-600')}>
-          {formatFrequency(entry.frequency)}
+          {formatPercent(entry.frequency)}
         </span>
       </td>
       <td className="px-4 py-3 text-center">

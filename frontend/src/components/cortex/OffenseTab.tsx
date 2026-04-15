@@ -64,6 +64,57 @@ export default function OffenseTab({ player }: { player: CortexPlayer }) {
           )
         })}
       </div>
+
+      {/* Touches Breakdown */}
+      {player.touchesBreakdown && (
+        <>
+          <SectionHeader title="Touches Breakdown" />
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 text-[10px] text-gray-500 uppercase tracking-wider">
+                  <th className="text-left px-4 py-3">Area</th>
+                  <th className="text-right px-4 py-3">Touches</th>
+                  <th className="text-right px-4 py-3">FGA</th>
+                  <th className="text-right px-4 py-3">FG%</th>
+                  <th className="text-right px-4 py-3">FTA</th>
+                  <th className="text-right px-4 py-3">PTS</th>
+                  <th className="text-right px-4 py-3">Passes</th>
+                  <th className="text-right px-4 py-3">AST</th>
+                  <th className="text-right px-4 py-3">TOV</th>
+                  <th className="text-right px-4 py-3">Fouls</th>
+                  <th className="text-right px-4 py-3">Pts/Touch</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(
+                  [
+                    ['Elbow', player.touchesBreakdown.elbow],
+                    ['Post', player.touchesBreakdown.post],
+                    ['Paint', player.touchesBreakdown.paint],
+                  ] as const
+                )
+                  .filter(([, row]) => row != null)
+                  .map(([label, row]) => (
+                    <tr key={label} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-2.5 text-gray-900">{label}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-gray-700">{row!.touches.toFixed(1)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-gray-700">{row!.fga.toFixed(1)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-gray-700">{(row!.fgPct * 100).toFixed(1)}%</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-gray-700">{row!.fta.toFixed(1)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono font-bold text-gray-900">{row!.pts.toFixed(1)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-gray-700">{row!.passes.toFixed(1)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-gray-700">{row!.ast.toFixed(1)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-gray-700">{row!.tov.toFixed(1)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-gray-700">{row!.fouls.toFixed(1)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono font-bold text-gray-900">{row!.ptsPerTouch.toFixed(2)}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   )
 }

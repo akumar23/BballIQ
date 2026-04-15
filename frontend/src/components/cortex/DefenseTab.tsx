@@ -98,6 +98,40 @@ export default function DefenseTab({ player }: { player: CortexPlayer }) {
         <StatBox label="Diff vs League" value={`${d.rimProtection.diffVsLeague > 0 ? '+' : ''}${d.rimProtection.diffVsLeague.toFixed(1)}%`} className="text-center" />
       </div>
 
+      {/* Opponent Shooting */}
+      {player.opponentShooting && player.opponentShooting.buckets.length > 0 && (
+        <>
+          <SectionHeader title="Opponent Shooting" tag="DEFENSIVE" />
+          <p className="text-xs text-gray-500 mb-3 font-mono">{player.opponentShooting.games} games</p>
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-4">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 text-[10px] text-gray-500 uppercase tracking-wider">
+                  <th className="text-left px-4 py-3">Distance</th>
+                  <th className="text-right px-4 py-3">Defended FGA</th>
+                  <th className="text-right px-4 py-3">DFG%</th>
+                  <th className="text-right px-4 py-3">Normal FG%</th>
+                  <th className="text-right px-4 py-3">Diff</th>
+                </tr>
+              </thead>
+              <tbody>
+                {player.opponentShooting.buckets.map((b) => (
+                  <tr key={b.label} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-2.5 text-gray-900">{b.label}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-gray-700">{b.defendedFga.toFixed(1)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-gray-700">{(b.defendedFgPct * 100).toFixed(1)}%</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-gray-700">{(b.normalFgPct * 100).toFixed(1)}%</td>
+                    <td className="px-4 py-2.5 text-right">
+                      <DiffBadge value={b.pctPlusminus * 100} label="vs Avg" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
       {/* Key Matchup Log */}
       <SectionHeader title="Key Matchup Log" />
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">

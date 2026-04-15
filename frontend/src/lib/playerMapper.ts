@@ -43,6 +43,8 @@ export function mapApiToPlayer(data: PlayerCardData): CortexPlayer {
     position: data.position ?? 'N/A',
     age: data.age ? parseFloat(data.age) : 0,
     number: data.jersey_number ? parseInt(data.jersey_number, 10) || 0 : 0,
+    heightInches: data.height_inches ?? null,
+    college: data.college ?? null,
     mpg: n(t?.mpg),
 
     traditional: {
@@ -87,9 +89,10 @@ export function mapApiToPlayer(data: PlayerCardData): CortexPlayer {
       rapm: n(aio?.rapm),
       rpm: n(aio?.rpm),
       epm: n(aio?.epm),
-      raptor: n(aio?.raptor),
       lebron: n(aio?.lebron),
       darko: n(aio?.darko),
+      laker: n(aio?.laker),
+      mamba: n(aio?.mamba),
       contextualized: {
         rawNetRtg: n(ctx?.raw_net_rtg),
         contextualizedNetRtg: n(ctx?.contextualized_net_rtg),
@@ -373,7 +376,37 @@ export function mapApiToPlayer(data: PlayerCardData): CortexPlayer {
       fgPct: n(d.fg_pct),
       efgPct: n(d.efg_pct),
       fg3Pct: n(d.fg3_pct),
+      fg2aFreq: n(d.fg2a_freq),
+      fg2Pct: n(d.fg2_pct),
+      fg3aFreq: n(d.fg3a_freq),
     })),
+
+    touchesBreakdown: data.touches_breakdown
+      ? {
+          elbow: data.touches_breakdown.elbow
+            ? { touches: n(data.touches_breakdown.elbow.touches), fga: n(data.touches_breakdown.elbow.fga), fgPct: n(data.touches_breakdown.elbow.fg_pct), fta: n(data.touches_breakdown.elbow.fta), pts: n(data.touches_breakdown.elbow.pts), passes: n(data.touches_breakdown.elbow.passes), ast: n(data.touches_breakdown.elbow.ast), tov: n(data.touches_breakdown.elbow.tov), fouls: n(data.touches_breakdown.elbow.fouls), ptsPerTouch: n(data.touches_breakdown.elbow.pts_per_touch) }
+            : null,
+          post: data.touches_breakdown.post
+            ? { touches: n(data.touches_breakdown.post.touches), fga: n(data.touches_breakdown.post.fga), fgPct: n(data.touches_breakdown.post.fg_pct), fta: n(data.touches_breakdown.post.fta), pts: n(data.touches_breakdown.post.pts), passes: n(data.touches_breakdown.post.passes), ast: n(data.touches_breakdown.post.ast), tov: n(data.touches_breakdown.post.tov), fouls: n(data.touches_breakdown.post.fouls), ptsPerTouch: n(data.touches_breakdown.post.pts_per_touch) }
+            : null,
+          paint: data.touches_breakdown.paint
+            ? { touches: n(data.touches_breakdown.paint.touches), fga: n(data.touches_breakdown.paint.fga), fgPct: n(data.touches_breakdown.paint.fg_pct), fta: n(data.touches_breakdown.paint.fta), pts: n(data.touches_breakdown.paint.pts), passes: n(data.touches_breakdown.paint.passes), ast: n(data.touches_breakdown.paint.ast), tov: n(data.touches_breakdown.paint.tov), fouls: n(data.touches_breakdown.paint.fouls), ptsPerTouch: n(data.touches_breakdown.paint.pts_per_touch) }
+            : null,
+        }
+      : null,
+
+    opponentShooting: data.opponent_shooting
+      ? {
+          games: data.opponent_shooting.games ?? 0,
+          buckets: (data.opponent_shooting.buckets ?? []).map((b) => ({
+            label: b.label,
+            defendedFga: n(b.defended_fga),
+            defendedFgPct: n(b.defended_fg_pct),
+            normalFgPct: n(b.normal_fg_pct),
+            pctPlusminus: n(b.pct_plusminus),
+          })),
+        }
+      : null,
 
     defensivePlayTypes: data.defensive_play_types
       ? {
