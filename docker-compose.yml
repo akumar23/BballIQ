@@ -57,6 +57,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: nba-stats-celery-worker
+    entrypoint: []
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/nba_stats
       REDIS_URL: redis://redis:6379/0
@@ -79,6 +80,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: nba-stats-celery-beat
+    entrypoint: []
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/nba_stats
       REDIS_URL: redis://redis:6379/0
@@ -102,13 +104,14 @@ services:
     depends_on:
       - backend
 
-  # One-shot service: runs migrations + seeds current season data
+  # One-shot service: runs migrations + seeds current season data (8 phases)
   # Usage: docker compose --profile seed run --rm seed
   seed:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: nba-stats-seed
+    entrypoint: []
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/nba_stats
       REDIS_URL: redis://redis:6379/0
@@ -133,6 +136,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: nba-stats-seed-all
+    entrypoint: []
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/nba_stats
       REDIS_URL: redis://redis:6379/0

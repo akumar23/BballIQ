@@ -1,17 +1,23 @@
 # Development docker-compose with hot reload
-# Usage: docker-compose -f docker-compose.dev.yml up
+# Usage: docker compose -f docker-compose.dev.yml up
+#
+# Seed current season data:
+#   docker compose -f docker-compose.dev.yml --profile seed run --rm seed
+#
+# Seed ALL seasons (2013-14 through 2024-25):
+#   docker compose -f docker-compose.dev.yml --profile seed-all run --rm seed-all
 
 services:
   # PostgreSQL Database
   db:
     image: postgres:15-alpine
-    container_name: nba-stats-db
+    container_name: nba-stats-db-dev
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: nba_stats
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data_dev:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
@@ -23,34 +29,41 @@ services:
   # Redis Cache
   redis:
     image: redis:7-alpine
-    container_name: nba-stats-redis
+    container_name: nba-stats-redis-dev
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   # FastAPI Backend (with hot reload)
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: nba-stats-backend
+    container_name: nba-stats-backend-dev
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/nba_stats
       REDIS_URL: redis://redis:6379/0
       NBA_API_CACHE_DIR: /app/data/nba_api_cache
     volumes:
       - ./backend:/app
-      - nba_api_cache:/app/data/nba_api_cache
+      - nba_api_cache_dev:/app/data/nba_api_cache
     ports:
       - "8000:8000"
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   # React Frontend (Vite dev server with hot reload)
   frontend:
     image: node:20-alpine
-    container_name: nba-stats-frontend
+    container_name: nba-stats-frontend-dev
     working_dir: /app
     environment:
       - VITE_API_URL=http://localhost:8000
@@ -63,6 +76,55 @@ services:
       - backend
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
 
+  # One-shot service: seeds current season data (8 phases)
+  # Usage: docker compose -f docker-compose.dev.yml --profile seed run --rm seed
+  seed:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nba-stats-seed-dev
+    entrypoint: []
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/nba_stats
+      REDIS_URL: redis://redis:6379/0
+      NBA_API_CACHE_DIR: /app/data/nba_api_cache
+    volumes:
+      - ./backend:/app
+      - nba_api_cache_dev:/app/data/nba_api_cache
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: python -m scripts.seed_all
+    profiles:
+      - seed
+
+  # One-shot service: seeds ALL data for EVERY season (2013-14 through 2024-25)
+  # Usage: docker compose -f docker-compose.dev.yml --profile seed-all run --rm seed-all
+  # WARNING: This takes several hours due to NBA API rate limits
+  seed-all:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nba-stats-seed-all-dev
+    entrypoint: []
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/nba_stats
+      REDIS_URL: redis://redis:6379/0
+      NBA_API_CACHE_DIR: /app/data/nba_api_cache
+    volumes:
+      - ./backend:/app
+      - nba_api_cache_dev:/app/data/nba_api_cache
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: python -m scripts.seed_everything
+    profiles:
+      - seed-all
+
 volumes:
-  postgres_data:
-  nba_api_cache:
+  postgres_data_dev:
+  nba_api_cache_dev:

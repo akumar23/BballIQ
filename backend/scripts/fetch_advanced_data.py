@@ -20,6 +20,7 @@ Usage:
 import argparse
 import logging
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 # Add parent directory to path for imports

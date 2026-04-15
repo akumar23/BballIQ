@@ -21,5 +21,10 @@ RUN mkdir -p /app/data/nba_api_cache
 # Expose port
 EXPOSE 8000
 
+# Entrypoint runs migrations before the main command
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+
 # Run the application
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
