@@ -57,4 +57,15 @@ class PlayerAdvancedStats(Base):
     # Turnover percentage
     tm_tov_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 1))
 
+    # Estimated variants (from NBA's "Advanced" measure type)
+    e_off_rating: Mapped[Decimal | None] = mapped_column(Numeric(6, 1))
+    e_def_rating: Mapped[Decimal | None] = mapped_column(Numeric(6, 1))
+    e_net_rating: Mapped[Decimal | None] = mapped_column(Numeric(6, 1))
+    e_usg_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
+    e_pace: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    pace_per40: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+
+    # Possessions (raw) — foundation for per-possession normalization
+    poss: Mapped[int | None]
+
     player = relationship("Player", back_populates="advanced_stats")

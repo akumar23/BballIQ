@@ -42,6 +42,11 @@ class SeasonStats(Base):
     total_elbow_touches: Mapped[int | None]
     total_time_of_possession: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
     avg_points_per_touch: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
+    avg_sec_per_touch: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    avg_drib_per_touch: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    pts_per_paint_touch: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
+    pts_per_post_touch: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
+    pts_per_elbow_touch: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
 
     # Aggregated tracking - Hustle/Defensive
     total_deflections: Mapped[int | None]
@@ -55,6 +60,18 @@ class SeasonStats(Base):
     total_box_outs_def: Mapped[int | None]
     total_screen_assists: Mapped[int | None]
     total_screen_assist_pts: Mapped[int | None]
+
+    # Hustle breakdown — splits + percentages
+    total_off_loose_balls_recovered: Mapped[int | None]
+    total_def_loose_balls_recovered: Mapped[int | None]
+    pct_loose_balls_off: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
+    pct_loose_balls_def: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
+    box_out_player_team_rebs: Mapped[int | None]
+    box_out_player_rebs: Mapped[int | None]
+    pct_box_outs_off: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
+    pct_box_outs_def: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
+    pct_box_outs_team_reb: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
+    pct_box_outs_reb: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
 
     # Estimated possessions (for per-possession calculations)
     estimated_possessions: Mapped[int | None]

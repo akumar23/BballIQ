@@ -17,10 +17,12 @@ class Player(Base):
 
     # Bio data
     height: Mapped[str | None] = mapped_column(String(10))  # e.g. "6-6"
+    height_inches: Mapped[int | None] = mapped_column(BigInteger)
     weight: Mapped[int | None] = mapped_column(BigInteger)  # lbs
     jersey_number: Mapped[str | None] = mapped_column(String(5))
     birth_date: Mapped[str | None] = mapped_column(String(20))  # ISO date string
     country: Mapped[str | None] = mapped_column(String(50))
+    college: Mapped[str | None] = mapped_column(String(120))
     draft_year: Mapped[int | None] = mapped_column(BigInteger)
     draft_round: Mapped[int | None] = mapped_column(BigInteger)
     draft_number: Mapped[int | None] = mapped_column(BigInteger)
@@ -48,3 +50,5 @@ class Player(Base):
     defender_distance_shooting = relationship("PlayerDefenderDistanceShooting", back_populates="player")
     defensive_play_types = relationship("PlayerDefensivePlayTypes", back_populates="player")
     consistency_stats = relationship("PlayerConsistencyStats", back_populates="player")
+    touches_breakdown = relationship("PlayerTouchesBreakdown", back_populates="player")
+    opponent_shooting = relationship("PlayerOpponentShooting", back_populates="player")

@@ -75,8 +75,16 @@ def fetch_and_store_bio_data(
             continue
 
         player.height = bio.get("PLAYER_HEIGHT")
+        height_inches = bio.get("PLAYER_HEIGHT_INCHES")
+        try:
+            player.height_inches = int(height_inches) if height_inches is not None else None
+        except (TypeError, ValueError):
+            player.height_inches = None
         player.weight = int(bio["PLAYER_WEIGHT"]) if bio.get("PLAYER_WEIGHT") and bio["PLAYER_WEIGHT"].isdigit() else None
         player.country = bio.get("COUNTRY")
+        # COLLEGE: NBA API returns "None" literal for non-college players; store as NULL
+        college = bio.get("COLLEGE")
+        player.college = college if college and college != "None" else None
 
         draft_year = bio.get("DRAFT_YEAR")
         if draft_year and draft_year != "Undrafted":

@@ -333,6 +333,8 @@ def fetch_and_store_data(
             season_stats.total_elbow_touches = data.elbow_touches
             season_stats.total_time_of_possession = data.time_of_possession
             season_stats.avg_points_per_touch = data.points_per_touch
+            season_stats.avg_sec_per_touch = data.avg_seconds_per_touch
+            season_stats.avg_drib_per_touch = data.avg_dribbles_per_touch
 
             # Update hustle/defensive stats
             season_stats.total_deflections = data.deflections
@@ -343,9 +345,19 @@ def fetch_and_store_data(
             season_stats.total_contested_shots_3pt = data.contested_shots_3pt
             season_stats.total_charges_drawn = data.charges_drawn
             season_stats.total_loose_balls_recovered = data.loose_balls_recovered
+            season_stats.total_off_loose_balls_recovered = data.off_loose_balls_recovered
+            season_stats.total_def_loose_balls_recovered = data.def_loose_balls_recovered
+            season_stats.pct_loose_balls_off = data.pct_loose_balls_off
+            season_stats.pct_loose_balls_def = data.pct_loose_balls_def
             season_stats.total_box_outs = data.box_outs
             season_stats.total_box_outs_off = data.box_outs_off
             season_stats.total_box_outs_def = data.box_outs_def
+            season_stats.box_out_player_team_rebs = data.box_out_player_team_rebs
+            season_stats.box_out_player_rebs = data.box_out_player_rebs
+            season_stats.pct_box_outs_off = data.pct_box_outs_off
+            season_stats.pct_box_outs_def = data.pct_box_outs_def
+            season_stats.pct_box_outs_team_reb = data.pct_box_outs_team_reb
+            season_stats.pct_box_outs_reb = data.pct_box_outs_reb
             season_stats.total_screen_assists = data.screen_assists
             season_stats.games_played = data.games_played
             season_stats.total_fta = data.fta
