@@ -301,6 +301,38 @@ class CardDefensivePlayType(BaseModel):
     percentile: Decimal | None = None
 
 
+class CardTouchKind(BaseModel):
+    touches: Decimal | None = None
+    fga: Decimal | None = None
+    fg_pct: Decimal | None = None
+    fta: Decimal | None = None
+    pts: Decimal | None = None
+    passes: Decimal | None = None
+    ast: Decimal | None = None
+    tov: Decimal | None = None
+    fouls: Decimal | None = None
+    pts_per_touch: Decimal | None = None
+
+
+class CardTouchesBreakdown(BaseModel):
+    elbow: CardTouchKind | None = None
+    post: CardTouchKind | None = None
+    paint: CardTouchKind | None = None
+
+
+class CardOpponentShootingBucket(BaseModel):
+    label: str
+    defended_fga: Decimal | None = None
+    defended_fg_pct: Decimal | None = None
+    normal_fg_pct: Decimal | None = None
+    pct_plusminus: Decimal | None = None
+
+
+class CardOpponentShooting(BaseModel):
+    games: int | None = None
+    buckets: list[CardOpponentShootingBucket] = []
+
+
 class CardDefensivePlayTypes(BaseModel):
     isolation: CardDefensivePlayType | None = None
     pnr_ball_handler: CardDefensivePlayType | None = None
@@ -382,6 +414,8 @@ class PlayerCardData(BaseModel):
     passing: CardPassing | None = None
     rebounding_tracking: CardReboundingTracking | None = None
     defender_distance: list[CardDefenderDistanceEntry] = []
+    touches_breakdown: CardTouchesBreakdown | None = None
+    opponent_shooting: CardOpponentShooting | None = None
     defensive_play_types: CardDefensivePlayTypes | None = None
     recent_games: list[CardGameLog] = []
     consistency: CardConsistency | None = None

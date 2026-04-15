@@ -59,6 +59,12 @@ PHASES = [
         "earliest": "2013-14",
     },
     {
+        "key": "touches_opp_defense",
+        "label": "Phase 3c: Elbow/Post/Paint Touches + Opponent Shooting Defense",
+        "module": "scripts.fetch_touches_and_opp_defense",
+        "earliest": "2013-14",
+    },
+    {
         "key": "play_types",
         "label": "Phase 4: Play Type Stats",
         "module": "scripts.fetch_play_type_data",

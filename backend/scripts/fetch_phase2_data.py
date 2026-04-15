@@ -255,15 +255,25 @@ def fetch_and_store_shooting_tracking(
                 tracking.pullup_pts = safe_decimal(pu.get("PTS"))
                 tracking.pullup_efg_pct = safe_decimal(pu.get("EFG_PCT"))
 
-            # Drives
+            # Drives — full LeagueDashPtStats Drives measure type
             if dr:
                 tracking.drives = safe_decimal(dr.get("DRIVES"))
                 tracking.drive_fgm = safe_decimal(dr.get("DRIVE_FGM"))
                 tracking.drive_fga = safe_decimal(dr.get("DRIVE_FGA"))
                 tracking.drive_fg_pct = safe_decimal(dr.get("DRIVE_FG_PCT"))
+                tracking.drive_ftm = safe_decimal(dr.get("DRIVE_FTM"))
+                tracking.drive_fta = safe_decimal(dr.get("DRIVE_FTA"))
+                tracking.drive_ft_pct = safe_decimal(dr.get("DRIVE_FT_PCT"))
                 tracking.drive_pts = safe_decimal(dr.get("DRIVE_PTS"))
+                tracking.drive_pts_pct = safe_decimal(dr.get("DRIVE_PTS_PCT"))
+                tracking.drive_passes = safe_decimal(dr.get("DRIVE_PASSES"))
+                tracking.drive_passes_pct = safe_decimal(dr.get("DRIVE_PASSES_PCT"))
                 tracking.drive_ast = safe_decimal(dr.get("DRIVE_AST"))
+                tracking.drive_ast_pct = safe_decimal(dr.get("DRIVE_AST_PCT"))
                 tracking.drive_tov = safe_decimal(dr.get("DRIVE_TOV"))
+                tracking.drive_tov_pct = safe_decimal(dr.get("DRIVE_TOV_PCT"))
+                tracking.drive_pf = safe_decimal(dr.get("DRIVE_PF"))
+                tracking.drive_pf_pct = safe_decimal(dr.get("DRIVE_PF_PCT"))
 
             processed += 1
 

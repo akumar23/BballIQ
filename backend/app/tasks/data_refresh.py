@@ -749,6 +749,14 @@ def refresh_advanced_data(self, season: str | None = None) -> dict:
                     adv_stats.dreb_pct = safe_decimal(adv.get("DREB_PCT"))
                     adv_stats.reb_pct = safe_decimal(adv.get("REB_PCT"))
                     adv_stats.tm_tov_pct = safe_decimal(adv.get("TM_TOV_PCT"))
+                    # Estimated variants + pace/poss from the Advanced measure type
+                    adv_stats.e_off_rating = safe_decimal(adv.get("E_OFF_RATING"))
+                    adv_stats.e_def_rating = safe_decimal(adv.get("E_DEF_RATING"))
+                    adv_stats.e_net_rating = safe_decimal(adv.get("E_NET_RATING"))
+                    adv_stats.e_usg_pct = safe_decimal(adv.get("E_USG_PCT"))
+                    adv_stats.e_pace = safe_decimal(adv.get("E_PACE"))
+                    adv_stats.pace_per40 = safe_decimal(adv.get("PACE_PER40"))
+                    adv_stats.poss = safe_int(adv.get("POSS"))
 
                 # Upsert clutch stats
                 clutch = clutch_by_player.get(player_id)
@@ -799,11 +807,14 @@ def refresh_advanced_data(self, season: str | None = None) -> dict:
                         db.add(def_stats)
 
                     if overall:
+                        def_stats.games_played = safe_int(overall.get("GP"))
+                        def_stats.age = safe_int(overall.get("AGE"))
                         def_stats.overall_d_fgm = safe_decimal(overall.get("D_FGM"))
                         def_stats.overall_d_fga = safe_decimal(overall.get("D_FGA"))
                         def_stats.overall_d_fg_pct = safe_decimal(overall.get("D_FG_PCT"))
                         def_stats.overall_normal_fg_pct = safe_decimal(overall.get("NORMAL_FG_PCT"))
                         def_stats.overall_pct_plusminus = safe_decimal(overall.get("PCT_PLUSMINUS"))
+                        def_stats.overall_freq = safe_decimal(overall.get("FREQ"))
 
                     if rim:
                         def_stats.rim_d_fgm = safe_decimal(rim.get("D_FGM"))
@@ -811,12 +822,14 @@ def refresh_advanced_data(self, season: str | None = None) -> dict:
                         def_stats.rim_d_fg_pct = safe_decimal(rim.get("D_FG_PCT"))
                         def_stats.rim_normal_fg_pct = safe_decimal(rim.get("NORMAL_FG_PCT"))
                         def_stats.rim_pct_plusminus = safe_decimal(rim.get("PCT_PLUSMINUS"))
+                        def_stats.rim_freq = safe_decimal(rim.get("FREQ"))
 
                     if three_pt:
                         def_stats.three_pt_d_fgm = safe_decimal(three_pt.get("D_FGM"))
                         def_stats.three_pt_d_fga = safe_decimal(three_pt.get("D_FGA"))
                         def_stats.three_pt_d_fg_pct = safe_decimal(three_pt.get("D_FG_PCT"))
                         def_stats.three_pt_normal_fg_pct = safe_decimal(three_pt.get("NORMAL_FG_PCT"))
+                        def_stats.three_pt_freq = safe_decimal(three_pt.get("FREQ"))
                         def_stats.three_pt_pct_plusminus = safe_decimal(three_pt.get("PCT_PLUSMINUS"))
 
                     if iso:

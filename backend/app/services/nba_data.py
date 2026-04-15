@@ -223,9 +223,19 @@ class PlayerTrackingData:
     contested_shots_3pt: int
     charges_drawn: int
     loose_balls_recovered: int
+    off_loose_balls_recovered: int
+    def_loose_balls_recovered: int
+    pct_loose_balls_off: Decimal
+    pct_loose_balls_def: Decimal
     box_outs: int
     box_outs_off: int
     box_outs_def: int
+    box_out_player_team_rebs: int
+    box_out_player_rebs: int
+    pct_box_outs_off: Decimal
+    pct_box_outs_def: Decimal
+    pct_box_outs_team_reb: Decimal
+    pct_box_outs_reb: Decimal
     screen_assists: int
     screen_assist_pts: int
 
@@ -986,9 +996,25 @@ class NBADataService:
                 contested_shots_3pt=hust.get("CONTESTED_SHOTS_3PT", 0) or 0,
                 charges_drawn=hust.get("CHARGES_DRAWN", 0) or 0,
                 loose_balls_recovered=hust.get("LOOSE_BALLS_RECOVERED", 0) or 0,
+                off_loose_balls_recovered=hust.get("OFF_LOOSE_BALLS_RECOVERED", 0) or 0,
+                def_loose_balls_recovered=hust.get("DEF_LOOSE_BALLS_RECOVERED", 0) or 0,
+                pct_loose_balls_off=Decimal(
+                    str(hust.get("PCT_LOOSE_BALLS_RECOVERED_OFF", 0) or 0)
+                ),
+                pct_loose_balls_def=Decimal(
+                    str(hust.get("PCT_LOOSE_BALLS_RECOVERED_DEF", 0) or 0)
+                ),
                 box_outs=hust.get("BOX_OUTS", 0) or 0,
                 box_outs_off=hust.get("OFF_BOXOUTS", 0) or 0,
                 box_outs_def=hust.get("DEF_BOXOUTS", 0) or 0,
+                box_out_player_team_rebs=hust.get("BOX_OUT_PLAYER_TEAM_REBS", 0) or 0,
+                box_out_player_rebs=hust.get("BOX_OUT_PLAYER_REBS", 0) or 0,
+                pct_box_outs_off=Decimal(str(hust.get("PCT_BOX_OUTS_OFF", 0) or 0)),
+                pct_box_outs_def=Decimal(str(hust.get("PCT_BOX_OUTS_DEF", 0) or 0)),
+                pct_box_outs_team_reb=Decimal(
+                    str(hust.get("PCT_BOX_OUTS_TEAM_REB", 0) or 0)
+                ),
+                pct_box_outs_reb=Decimal(str(hust.get("PCT_BOX_OUTS_REB", 0) or 0)),
                 screen_assists=hust.get("SCREEN_ASSISTS", 0) or 0,
                 screen_assist_pts=hust.get("SCREEN_AST_PTS", 0) or 0,
                 # Traditional stats
@@ -1456,6 +1482,161 @@ class NBADataService:
         result = three_pt.get_normalized_dict()["LeagueDashPTDefend"]
 
         # Cache the result
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def _get_pt_measure_stats(
+        self,
+        measure_type: str,
+        cache_prefix: CacheKeyPrefix,
+        season: str,
+    ) -> list[dict]:
+        """Shared fetcher for LeagueDashPtStats measure-type variants.
+
+        Used by the elbow/post/paint touch breakdown endpoints which all hit
+        the same underlying endpoint with a different pt_measure_type.
+        """
+        cache_key = self._get_cache_key(cache_prefix, season)
+
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info(
+                    "Cache hit for %s stats (season: %s)", measure_type, season
+                )
+                return cached
+
+        logger.info(
+            "Cache miss for %s stats (season: %s), fetching from API",
+            measure_type,
+            season,
+        )
+        stats = self._request_with_retry(
+            LeagueDashPtStats,
+            season=season,
+            per_mode_simple="PerGame",
+            player_or_team="Player",
+            pt_measure_type=measure_type,
+        )
+        result = stats.get_normalized_dict()["LeagueDashPtStats"]
+
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_elbow_touch_stats(self, season: str = "2024-25") -> list[dict]:
+        """Get elbow touch tracking stats for all players.
+
+        Returns per-game elbow touches plus shooting/passing/turnover efficiency
+        on those touches. Useful for identifying high-post hubs and connective
+        playmakers.
+        """
+        return self._get_pt_measure_stats(
+            "ElbowTouch", CacheKeyPrefix.NBA_ELBOW_TOUCH, season
+        )
+
+    def get_post_touch_stats(self, season: str = "2024-25") -> list[dict]:
+        """Get post touch tracking stats for all players.
+
+        Returns per-game post touches plus shooting/passing/turnover efficiency
+        on those touches. Useful for evaluating back-to-basket scoring and
+        post-up playmaking.
+        """
+        return self._get_pt_measure_stats(
+            "PostTouch", CacheKeyPrefix.NBA_POST_TOUCH, season
+        )
+
+    def get_paint_touch_stats(self, season: str = "2024-25") -> list[dict]:
+        """Get paint touch tracking stats for all players.
+
+        Returns per-game paint touches plus efficiency on those touches.
+        Captures rim pressure, which is strongly correlated with offensive
+        gravity and free-throw generation.
+        """
+        return self._get_pt_measure_stats(
+            "PaintTouch", CacheKeyPrefix.NBA_PAINT_TOUCH, season
+        )
+
+    def get_two_point_defense_stats(self, season: str = "2024-25") -> list[dict]:
+        """Get 2-point defense stats for all players.
+
+        Returns defensive stats for 2-point shots contested by each player,
+        complementing the existing rim-protection (<6ft) and 3-point coverage.
+        """
+        cache_key = self._get_cache_key(CacheKeyPrefix.NBA_DEFENSE_2PT, season)
+
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info("Cache hit for 2PT defense stats (season: %s)", season)
+                return cached
+
+        logger.info(
+            "Cache miss for 2PT defense stats (season: %s), fetching from API",
+            season,
+        )
+        two_pt = self._request_with_retry(
+            LeagueDashPtDefend,
+            season=season,
+            per_mode_simple="Totals",
+            defense_category="2 Pointers",
+        )
+        result = two_pt.get_normalized_dict()["LeagueDashPTDefend"]
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_long_midrange_defense_stats(
+        self, season: str = "2024-25"
+    ) -> list[dict]:
+        """Get long-midrange (>15 ft) defense stats for all players."""
+        cache_key = self._get_cache_key(CacheKeyPrefix.NBA_DEFENSE_LONG_MID, season)
+
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info(
+                    "Cache hit for long-mid defense stats (season: %s)", season
+                )
+                return cached
+
+        logger.info(
+            "Cache miss for long-mid defense stats (season: %s), fetching from API",
+            season,
+        )
+        long_mid = self._request_with_retry(
+            LeagueDashPtDefend,
+            season=season,
+            per_mode_simple="Totals",
+            defense_category="Greater Than 15Ft",
+        )
+        result = long_mid.get_normalized_dict()["LeagueDashPTDefend"]
+        redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
+        return result
+
+    def get_less_than_10ft_defense_stats(
+        self, season: str = "2024-25"
+    ) -> list[dict]:
+        """Get <10 ft defense stats for all players (near-rim + short paint)."""
+        cache_key = self._get_cache_key(CacheKeyPrefix.NBA_DEFENSE_LT_10FT, season)
+
+        if not self.bypass_cache:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info(
+                    "Cache hit for <10ft defense stats (season: %s)", season
+                )
+                return cached
+
+        logger.info(
+            "Cache miss for <10ft defense stats (season: %s), fetching from API",
+            season,
+        )
+        lt_10 = self._request_with_retry(
+            LeagueDashPtDefend,
+            season=season,
+            per_mode_simple="Totals",
+            defense_category="Less Than 10Ft",
+        )
+        result = lt_10.get_normalized_dict()["LeagueDashPTDefend"]
         redis_cache.set(cache_key, result, ttl=settings.cache_ttl_tracking_stats)
         return result
 

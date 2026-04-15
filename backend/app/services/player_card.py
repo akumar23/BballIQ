@@ -27,11 +27,13 @@ from app.models import (
     PlayerDefensiveStats,
     PlayerMatchups,
     PlayerOnOffStats,
+    PlayerOpponentShooting,
     PlayerPassingStats,
     PlayerReboundingTracking,
     PlayerShootingTracking,
     PlayerShotZones,
     PlayerSpeedDistance,
+    PlayerTouchesBreakdown,
     SeasonPlayTypeStats,
     SeasonStats,
 )
@@ -61,6 +63,8 @@ from app.schemas.player_card import (
     CardLuckAdjusted,
     CardMatchup,
     CardOnOff,
+    CardOpponentShooting,
+    CardOpponentShootingBucket,
     CardOpponentTierEntry,
     CardPassing,
     CardPlayoffProjection,
@@ -72,6 +76,8 @@ from app.schemas.player_card import (
     CardSchemeScore,
     CardShotZone,
     CardSpeedDistance,
+    CardTouchesBreakdown,
+    CardTouchKind,
     CardTraditional,
     CardWithoutTeammate,
     PlayerCardData,
@@ -300,6 +306,8 @@ class PlayerCardService:
         card_passing = self._build_passing()
         card_reb_tracking = self._build_rebounding_tracking()
         card_def_dist = self._build_defender_distance()
+        card_touches_breakdown = self._build_touches_breakdown()
+        card_opponent_shooting = self._build_opponent_shooting()
         card_def_play_types = self._build_defensive_play_types()
         card_recent_games, card_consistency = self._build_games_and_consistency()
 
@@ -338,6 +346,8 @@ class PlayerCardService:
             passing=card_passing,
             rebounding_tracking=card_reb_tracking,
             defender_distance=card_def_dist,
+            touches_breakdown=card_touches_breakdown,
+            opponent_shooting=card_opponent_shooting,
             defensive_play_types=card_def_play_types,
             recent_games=card_recent_games,
             consistency=card_consistency,
@@ -1157,6 +1167,61 @@ class PlayerCardService:
             reb_chance_pct=reb_row.reb_chance_pct,
             reb_chance_pct_adj=reb_row.reb_chance_pct_adj,
         )
+
+    def _build_touches_breakdown(self) -> CardTouchesBreakdown | None:
+        tb_row = self._first(PlayerTouchesBreakdown)
+        if not tb_row:
+            return None
+
+        def _kind(internal_prefix: str, touches_attr: str) -> CardTouchKind | None:
+            touches = getattr(tb_row, touches_attr)
+            if not touches:
+                return None
+            return CardTouchKind(
+                touches=touches,
+                fga=getattr(tb_row, f"{internal_prefix}_fga"),
+                fg_pct=getattr(tb_row, f"{internal_prefix}_fg_pct"),
+                fta=getattr(tb_row, f"{internal_prefix}_fta"),
+                pts=getattr(tb_row, f"{internal_prefix}_pts"),
+                passes=getattr(tb_row, f"{internal_prefix}_passes"),
+                ast=getattr(tb_row, f"{internal_prefix}_ast"),
+                tov=getattr(tb_row, f"{internal_prefix}_tov"),
+                fouls=getattr(tb_row, f"{internal_prefix}_fouls"),
+                pts_per_touch=getattr(tb_row, f"{internal_prefix}_pts_per_touch"),
+            )
+
+        elbow = _kind("elbow_touch", "elbow_touches")
+        post = _kind("post_touch", "post_touches")
+        paint = _kind("paint_touch", "paint_touches")
+        if not any((elbow, post, paint)):
+            return None
+        return CardTouchesBreakdown(elbow=elbow, post=post, paint=paint)
+
+    def _build_opponent_shooting(self) -> CardOpponentShooting | None:
+        opp_row = self._first(PlayerOpponentShooting)
+        if not opp_row:
+            return None
+        buckets: list[CardOpponentShootingBucket] = []
+        for prefix, label in (
+            ("lt_10ft", "< 10 ft"),
+            ("two_pt", "All 2PT"),
+            ("long_mid", "> 15 ft (2PT)"),
+        ):
+            fga = getattr(opp_row, f"{prefix}_defended_fga")
+            if not fga:
+                continue
+            buckets.append(
+                CardOpponentShootingBucket(
+                    label=label,
+                    defended_fga=fga,
+                    defended_fg_pct=getattr(opp_row, f"{prefix}_defended_fg_pct"),
+                    normal_fg_pct=getattr(opp_row, f"{prefix}_normal_fg_pct"),
+                    pct_plusminus=getattr(opp_row, f"{prefix}_pct_plusminus"),
+                )
+            )
+        if not buckets:
+            return None
+        return CardOpponentShooting(games=opp_row.two_pt_games, buckets=buckets)
 
     def _build_defender_distance(self) -> list[CardDefenderDistanceEntry]:
         dd_row = self._first(PlayerDefenderDistanceShooting)

@@ -239,11 +239,19 @@ def fetch_defender_distance(service: NBADataService, season: str, db: Session, l
             db.add(rec)
 
         for prefix, row in ranges.items():
+            # Overall
             setattr(rec, f"{prefix}_fga_freq", _d(row.get("FGA_FREQUENCY")))
             setattr(rec, f"{prefix}_fgm", _d(row.get("FGM")))
             setattr(rec, f"{prefix}_fga", _d(row.get("FGA")))
             setattr(rec, f"{prefix}_fg_pct", _d(row.get("FG_PCT")))
             setattr(rec, f"{prefix}_efg_pct", _d(row.get("EFG_PCT")))
+            # 2PT split
+            setattr(rec, f"{prefix}_fg2a_freq", _d(row.get("FG2A_FREQUENCY")))
+            setattr(rec, f"{prefix}_fg2m", _d(row.get("FG2M")))
+            setattr(rec, f"{prefix}_fg2a", _d(row.get("FG2A")))
+            setattr(rec, f"{prefix}_fg2_pct", _d(row.get("FG2_PCT")))
+            # 3PT split
+            setattr(rec, f"{prefix}_fg3a_freq", _d(row.get("FG3A_FREQUENCY")))
             setattr(rec, f"{prefix}_fg3m", _d(row.get("FG3M")))
             setattr(rec, f"{prefix}_fg3a", _d(row.get("FG3A")))
             setattr(rec, f"{prefix}_fg3_pct", _d(row.get("FG3_PCT")))

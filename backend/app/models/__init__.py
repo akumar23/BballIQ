@@ -30,6 +30,8 @@ from app.models.rebounding_tracking import PlayerReboundingTracking
 from app.models.defender_distance_shooting import PlayerDefenderDistanceShooting
 from app.models.defensive_play_types import PlayerDefensivePlayTypes
 from app.models.consistency_stats import PlayerConsistencyStats
+from app.models.touches_breakdown import PlayerTouchesBreakdown
+from app.models.opponent_shooting import PlayerOpponentShooting
 
 __all__ = [
     "Player",
@@ -64,4 +66,6 @@ __all__ = [
     "PlayerDefenderDistanceShooting",
     "PlayerDefensivePlayTypes",
     "PlayerConsistencyStats",
+    "PlayerTouchesBreakdown",
+    "PlayerOpponentShooting",
 ]
