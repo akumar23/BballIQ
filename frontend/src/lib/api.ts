@@ -1,4 +1,4 @@
-import type { ImpactLeaderboardEntry, Player, PlayerCardOption, PlayerDetail, PlayerImpact, PlayerPerGameStats } from '@/types'
+import type { GameLog, ImpactLeaderboardEntry, Player, PlayerCardOption, PlayerDetail, PlayerImpact, PlayerPerGameStats } from '@/types'
 import type { PlayTypeKey, PlayTypeLeaderboardResponse, PlayTypeSortBy, PlayerPlayTypeStats } from '@/types/playType'
 import type { PlayerCardData } from '@/types/playerCard'
 
@@ -33,6 +33,10 @@ export const api = {
     card: (id: number, season?: string) => {
       const query = season ? `?season=${season}` : ''
       return fetchJson<PlayerCardData>(`/players/${id}/card${query}`)
+    },
+    gameLogs: (id: number, season?: string) => {
+      const query = season ? `?season=${season}` : ''
+      return fetchJson<GameLog[]>(`/players/${id}/games${query}`)
     },
   },
   leaderboards: {

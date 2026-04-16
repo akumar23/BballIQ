@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 
 from app.models import (
+    GameStats,
     Player,
     PlayerCareerStats,
     SeasonStats,
@@ -148,6 +149,54 @@ async def get_player(
         if season_stat
         else None,
     )
+
+
+@router.get("/{player_id}/games")
+async def get_player_games(
+    player_id: int,
+    season: str = Query(default="2024-25"),
+    db: Session = Depends(get_db),
+):
+    """Get all game logs for a player in a given season, ordered by date descending."""
+    player = db.query(Player).filter(Player.id == player_id).first()
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    games = (
+        db.query(GameStats)
+        .filter(GameStats.player_id == player_id, GameStats.season == season)
+        .order_by(GameStats.game_date.desc())
+        .all()
+    )
+
+    return [
+        {
+            "game_date": g.game_date,
+            "matchup": g.matchup,
+            "wl": g.wl,
+            "minutes": float(g.minutes) if g.minutes is not None else None,
+            "points": g.points,
+            "rebounds": g.rebounds,
+            "assists": g.assists,
+            "steals": g.steals,
+            "blocks": g.blocks,
+            "turnovers": g.turnovers,
+            "fgm": g.fgm,
+            "fga": g.fga,
+            "fg_pct": float(g.fg_pct) if g.fg_pct is not None else None,
+            "fg3m": g.fg3m,
+            "fg3a": g.fg3a,
+            "fg3_pct": float(g.fg3_pct) if g.fg3_pct is not None else None,
+            "ftm": g.ftm,
+            "fta": g.fta,
+            "ft_pct": float(g.ft_pct) if g.ft_pct is not None else None,
+            "plus_minus": g.plus_minus,
+            "game_score": float(g.game_score) if g.game_score is not None else None,
+            "offensive_rebounds": g.offensive_rebounds,
+            "defensive_rebounds": g.defensive_rebounds,
+        }
+        for g in games
+    ]
 
 
 @router.get("/{player_id}/card", response_model=PlayerCardData)

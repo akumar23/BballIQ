@@ -88,7 +88,7 @@ PHASES = [
         "key": "all_in_one",
         "label": "Phase 7: All-In-One Metrics (EPM, DARKO, LEBRON, RPM)",
         "module": "scripts.fetch_all_in_one_data",
-        "earliest": "2024-25",  # External scraped data — only current season
+        "earliest": "2024-25",  # External scraped data — mostly paywalled for historical
     },
     {
         "key": "game_logs",

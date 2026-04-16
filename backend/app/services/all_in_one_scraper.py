@@ -363,8 +363,12 @@ class AllInOneMetricsScraper:
     def __exit__(self, *args):
         self.close()
 
-    def fetch_all(self) -> dict[str, ScraperResult]:
+    def fetch_all(self, season: str | None = None) -> dict[str, ScraperResult]:
         """Fetch all available all-in-one metrics.
+
+        Args:
+            season: NBA season string (e.g. "2024-25"). Passed to scrapers
+                    that support historical data. If None, fetches current season.
 
         Returns:
             Dict mapping source name to ScraperResult
@@ -372,7 +376,7 @@ class AllInOneMetricsScraper:
         results = {}
 
         scrapers = [
-            ("EPM", self.fetch_epm),
+            ("EPM", lambda: self.fetch_epm(season=season)),
             ("DARKO", self.fetch_darko),
             ("LEBRON", self.fetch_lebron),
             ("RPM", self.fetch_rpm),
@@ -427,7 +431,7 @@ class AllInOneMetricsScraper:
         response.raise_for_status()
         return _parse_sveltekit_ndjson(response.text)
 
-    def fetch_epm(self) -> ScraperResult:
+    def fetch_epm(self, season: str | None = None) -> ScraperResult:
         """Fetch EPM data from dunksandthrees.com via SvelteKit data endpoint.
 
         dunksandthrees.com is a SvelteKit app. The __data.json endpoint returns
@@ -436,13 +440,23 @@ class AllInOneMetricsScraper:
 
         The response is NDJSON with the main data in the first line's node[2]
         containing fields: player_name, off (O-EPM), def (D-EPM), tot (total EPM).
+
+        Args:
+            season: NBA season string (e.g. "2024-25"). The endpoint uses the
+                    ending year as a query param (e.g. ?season=2025).
+                    Supports seasons from 2001-02 through present.
+                    If None, fetches the current season.
         """
         result = ScraperResult(source="EPM")
 
         try:
-            ndjson = self._fetch_sveltekit_data(
-                "https://dunksandthrees.com/epm/__data.json"
-            )
+            url = "https://dunksandthrees.com/epm/__data.json"
+            if season:
+                # Convert "2024-25" -> 2025 (ending year)
+                ending_year = int(season.split("-")[0]) + 1
+                url = f"{url}?season={ending_year}"
+
+            ndjson = self._fetch_sveltekit_data(url)
 
             data_array, pointer_array = _find_sveltekit_stats_node(
                 ndjson, "player_name"
