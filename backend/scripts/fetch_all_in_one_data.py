@@ -44,17 +44,21 @@ SOURCE_FIELD_MAP = {
 }
 
 
-def get_all_players(db: Session) -> list[tuple[int, str]]:
-    """Get all active players from DB.
+def get_all_players(db: Session, active_only: bool = True) -> list[tuple[int, str]]:
+    """Get players from DB.
+
+    Args:
+        db: Database session
+        active_only: If True, only return active players. Set to False
+                     for historical season lookups.
 
     Returns:
         List of (player.id, player.name) tuples
     """
-    players = (
-        db.query(Player.id, Player.name)
-        .filter(Player.active.is_(True))
-        .all()
-    )
+    query = db.query(Player.id, Player.name)
+    if active_only:
+        query = query.filter(Player.active.is_(True))
+    players = query.all()
     return [(p.id, p.name) for p in players]
 
 
@@ -182,10 +186,13 @@ def fetch_and_store_all_in_one_data(
     print("-" * 50)
 
     # Step 1: Get player lookup
+    # For historical seasons, include all players (not just active)
+    is_current_season = season == "2024-25"
     print("\nStep 1: Building player name lookup...")
-    players = get_all_players(db)
+    players = get_all_players(db, active_only=is_current_season)
     name_lookup = build_name_lookup(players)
-    print(f"  - {len(players)} active players in database")
+    label = "active" if is_current_season else "total"
+    print(f"  - {len(players)} {label} players in database")
 
     if not players:
         print("  [ERROR] No players in database. Run fetch_data.py first.")
@@ -195,24 +202,38 @@ def fetch_and_store_all_in_one_data(
     print("\nStep 2: Scraping external sources...")
     active_sources = sources or ALL_SOURCES
 
+    # DARKO, LEBRON, and RPM only have current-season data.
+    # Skip them for historical seasons to avoid storing wrong-season data.
+    CURRENT_ONLY_SOURCES = {"DARKO", "LEBRON", "RPM"}
+    is_current_season = season == "2024-25"
+
     with AllInOneMetricsScraper() as scraper:
         results = {}
 
         if "EPM" in active_sources:
-            print("\n  Fetching EPM from dunksandthrees.com...")
-            results["EPM"] = scraper.fetch_epm()
+            print(f"\n  Fetching EPM from dunksandthrees.com (season={season})...")
+            results["EPM"] = scraper.fetch_epm(season=season)
 
         if "DARKO" in active_sources:
-            print("  Fetching DARKO from darko.app...")
-            results["DARKO"] = scraper.fetch_darko()
+            if is_current_season:
+                print("  Fetching DARKO from darko.app...")
+                results["DARKO"] = scraper.fetch_darko()
+            else:
+                print("  Skipping DARKO (current season only)")
 
         if "LEBRON" in active_sources:
-            print("  Fetching LEBRON from bball-index.com...")
-            results["LEBRON"] = scraper.fetch_lebron()
+            if is_current_season:
+                print("  Fetching LEBRON from bball-index.com...")
+                results["LEBRON"] = scraper.fetch_lebron()
+            else:
+                print("  Skipping LEBRON (current season only)")
 
         if "RPM" in active_sources:
-            print("  Fetching RPM from ESPN...")
-            results["RPM"] = scraper.fetch_rpm()
+            if is_current_season:
+                print("  Fetching RPM from xrapm.com...")
+                results["RPM"] = scraper.fetch_rpm()
+            else:
+                print("  Skipping RPM (current season only)")
 
     # Print scraping results
     print("\n  Scraping Results:")

@@ -10,6 +10,7 @@ import ImpactTab from '@/components/cortex/ImpactTab'
 import PortabilityTab from '@/components/cortex/PortabilityTab'
 import ChampionshipTab from '@/components/cortex/ChampionshipTab'
 import TrajectoryTab from '@/components/cortex/TrajectoryTab'
+import GameLogsTab from '@/components/cortex/GameLogsTab'
 
 const TABS = [
   'Overview',
@@ -19,6 +20,7 @@ const TABS = [
   'Portability',
   'Championship',
   'Trajectory',
+  'Game Log',
 ] as const
 
 type TabName = (typeof TABS)[number]
@@ -86,6 +88,8 @@ export default function PlayerCardPage() {
         return <ChampionshipTab player={cardData} />
       case 'Trajectory':
         return <TrajectoryTab player={cardData} />
+      case 'Game Log':
+        return <GameLogsTab player={cardData} />
     }
   }
 

@@ -44,6 +44,32 @@ export interface PlayerDetail extends Player {
   tracking_stats: PlayerTrackingStats | null
 }
 
+export interface GameLog {
+  game_date: string | null
+  matchup: string | null
+  wl: string | null
+  minutes: number | null
+  points: number | null
+  rebounds: number | null
+  assists: number | null
+  steals: number | null
+  blocks: number | null
+  turnovers: number | null
+  fgm: number | null
+  fga: number | null
+  fg_pct: number | null
+  fg3m: number | null
+  fg3a: number | null
+  fg3_pct: number | null
+  ftm: number | null
+  fta: number | null
+  ft_pct: number | null
+  plus_minus: number | null
+  game_score: number | null
+  offensive_rebounds: number | null
+  defensive_rebounds: number | null
+}
+
 export interface PlayerCardOption {
   id: number
   name: string
