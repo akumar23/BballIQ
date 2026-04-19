@@ -36,7 +36,7 @@ jobs:
 
   build-backend:
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
+    if: needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -61,7 +61,7 @@ jobs:
 
   build-frontend:
     needs: changes
-    if: needs.changes.outputs.frontend == 'true'
+    if: needs.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -92,7 +92,8 @@ jobs:
       needs.build-frontend.result != 'failure' &&
       (needs.changes.outputs.backend == 'true' ||
        needs.changes.outputs.frontend == 'true' ||
-       needs.changes.outputs.manifests == 'true')
+       needs.changes.outputs.manifests == 'true' ||
+       github.event_name == 'workflow_dispatch')
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
@@ -108,7 +109,7 @@ jobs:
         run: kubectl apply -f k8s/namespace.yaml
 
       - name: Update backend images to commit SHA
-        if: needs.changes.outputs.backend == 'true'
+        if: needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           TAG="${BACKEND_IMAGE}:${{ github.sha }}"
           kubectl -n "$NAMESPACE" set image deployment/backend       "*=$TAG"
@@ -116,7 +117,7 @@ jobs:
           kubectl -n "$NAMESPACE" set image deployment/celery-beat   "*=$TAG"
 
       - name: Update frontend image to commit SHA
-        if: needs.changes.outputs.frontend == 'true'
+        if: needs.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           TAG="${FRONTEND_IMAGE}:${{ github.sha }}"
           kubectl -n "$NAMESPACE" set image deployment/frontend "*=$TAG"
@@ -124,11 +125,11 @@ jobs:
       - name: Wait for rollouts
         run: |
           set -e
-          if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
+          if [ "${{ needs.changes.outputs.backend }}" = "true" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             kubectl -n "$NAMESPACE" rollout status deployment/backend       --timeout=5m
             kubectl -n "$NAMESPACE" rollout status deployment/celery-worker --timeout=5m
             kubectl -n "$NAMESPACE" rollout status deployment/celery-beat   --timeout=5m
           fi
-          if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
+          if [ "${{ needs.changes.outputs.frontend }}" = "true" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             kubectl -n "$NAMESPACE" rollout status deployment/frontend --timeout=5m
           fi
