@@ -1,0 +1,134 @@
+name: Deploy to cluster
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  BACKEND_IMAGE: ghcr.io/akumar23/nba-stats-backend
+  FRONTEND_IMAGE: ghcr.io/akumar23/nba-stats-frontend
+  NAMESPACE: nba-stats
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      manifests: ${{ steps.filter.outputs.manifests }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+            manifests:
+              - 'k8s/**'
+
+  build-backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+            ${{ env.BACKEND_IMAGE }}:latest
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+  build-frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+            ${{ env.FRONTEND_IMAGE }}:latest
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+  deploy:
+    needs: [changes, build-backend, build-frontend]
+    if: |
+      always() &&
+      needs.build-backend.result != 'failure' &&
+      needs.build-frontend.result != 'failure' &&
+      (needs.changes.outputs.backend == 'true' ||
+       needs.changes.outputs.frontend == 'true' ||
+       needs.changes.outputs.manifests == 'true')
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify cluster access
+        run: kubectl cluster-info
+
+      - name: Apply manifests
+        if: needs.changes.outputs.manifests == 'true'
+        run: kubectl apply -f k8s/
+
+      - name: Ensure namespace exists
+        run: kubectl apply -f k8s/namespace.yaml
+
+      - name: Update backend images to commit SHA
+        if: needs.changes.outputs.backend == 'true'
+        run: |
+          TAG="${BACKEND_IMAGE}:${{ github.sha }}"
+          kubectl -n "$NAMESPACE" set image deployment/backend       "*=$TAG"
+          kubectl -n "$NAMESPACE" set image deployment/celery-worker "*=$TAG"
+          kubectl -n "$NAMESPACE" set image deployment/celery-beat   "*=$TAG"
+
+      - name: Update frontend image to commit SHA
+        if: needs.changes.outputs.frontend == 'true'
+        run: |
+          TAG="${FRONTEND_IMAGE}:${{ github.sha }}"
+          kubectl -n "$NAMESPACE" set image deployment/frontend "*=$TAG"
+
+      - name: Wait for rollouts
+        run: |
+          set -e
+          if [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
+            kubectl -n "$NAMESPACE" rollout status deployment/backend       --timeout=5m
+            kubectl -n "$NAMESPACE" rollout status deployment/celery-worker --timeout=5m
+            kubectl -n "$NAMESPACE" rollout status deployment/celery-beat   --timeout=5m
+          fi
+          if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
+            kubectl -n "$NAMESPACE" rollout status deployment/frontend --timeout=5m
+          fi
