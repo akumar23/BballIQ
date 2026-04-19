@@ -1,0 +1,53 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed-everything
+  namespace: nba-stats
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: seed-everything
+    spec:
+      restartPolicy: OnFailure
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      containers:
+        - name: seed
+          image: ghcr.io/akumar23/nba-stats-backend:latest
+          imagePullPolicy: Always
+          command:
+            - python
+            - -m
+            - scripts.seed_everything
+            - --skip-migrations
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: DATABASE_URL
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: REDIS_URL
+            - name: NBA_API_CACHE_DIR
+              value: /app/data/nba_api_cache
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          volumeMounts:
+            - name: nba-api-cache
+              mountPath: /app/data/nba_api_cache
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+      volumes:
+        - name: nba-api-cache
+          emptyDir: {}
