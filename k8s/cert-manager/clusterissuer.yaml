@@ -1,0 +1,25 @@
+# ClusterIssuer for Let's Encrypt (requires cert-manager to be installed)
+# Install cert-manager first:
+#   kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.15.0/cert-manager.yaml
+#
+# IMPORTANT: Replace <YOUR_EMAIL> below with a valid email address for Let's Encrypt notifications
+# and <YOUR_DOMAIN> in the ingress.yaml with your actual domain name
+
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    # Let's Encrypt production server
+    server: https://acme-v02.api.letsencrypt.org/directory
+    # Email address for certificate expiration warnings (MUST be replaced)
+    email: <YOUR_EMAIL>@<YOUR_DOMAIN>
+    # Name of secret to store ACME account key
+    privateKeySecretRef:
+      name: letsencrypt-prod-key
+    solvers:
+      # Use HTTP-01 challenge with nginx ingress controller
+      - http01:
+          ingress:
+            class: nginx

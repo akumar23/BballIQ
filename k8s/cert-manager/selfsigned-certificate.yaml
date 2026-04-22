@@ -1,0 +1,26 @@
+# Self-signed Certificate for nba-stats.local (cert-manager required)
+# This generates a self-signed TLS certificate suitable for local/homelab use
+#
+# Prerequisites:
+#   - cert-manager installed
+#   - selfsigned-issuer.yaml applied
+#
+# After applying, browsers will show a security warning (expected for self-signed certs)
+# To add to macOS trusted keychain:
+#   1. Get the certificate: kubectl get secret nba-stats-tls -n nba-stats -o jsonpath='{.data.tls\.crt}' | base64 -d > nba-stats.crt
+#   2. Import: open nba-stats.crt (or: sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain nba-stats.crt)
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: nba-stats-tls
+  namespace: nba-stats
+spec:
+  secretName: nba-stats-tls
+  issuerRef:
+    name: selfsigned
+    kind: ClusterIssuer
+  commonName: nba-stats.local
+  dnsNames:
+    - nba-stats.local
+    - localhost

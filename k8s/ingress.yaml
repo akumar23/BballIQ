@@ -6,10 +6,22 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Uncomment the line below if using cert-manager + Let's Encrypt
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
   ingressClassName: nginx
+  # Uncomment the TLS section below if using cert-manager or self-signed certs
+  # See k8s/tls/README.md for setup instructions
+  # tls:
+  #   - hosts:
+  #       - nba-stats.example.com  # Replace with your actual domain
+  #     secretName: nba-stats-tls
   rules:
-    - http:
+    # Replace 'nba-stats.example.com' with your actual domain or hostname
+    # For local testing without TLS, can use 'nba-stats.local'
+    - host: nba-stats.local
+      http:
         paths:
           - path: /
             pathType: Prefix
