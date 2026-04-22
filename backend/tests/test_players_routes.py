@@ -4,23 +4,20 @@ Covers:
 * ``/players/available`` legacy (bare-array) shape vs paginated envelope.
 * ``/players/search`` ILIKE fallback path (SQLite in-memory has no pg_trgm).
 
-Uses a SQLite in-memory database with the ORM metadata created directly —
-this is cheap and doesn't require Alembic for route-level smoke tests.
+Uses the shared in-memory SQLite engine + ``TestClient`` fixtures from
+``conftest.py``. Seeding is done through a small ``_seed_players`` helper
+that runs before the ``TestClient`` is created, matching the pattern
+expected by the other route tests.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable
 
-import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
-from app.db.session import get_db
-from app.main import app
 from app.models import Player, PlayerCareerStats, SeasonStats
-from app.models.base import Base
 
 
 def _seed_players(session: Session) -> None:
@@ -92,81 +89,27 @@ def _seed_players(session: Session) -> None:
             ),
         ]
     )
-    session.commit()
 
 
-@pytest.fixture()
-def client() -> Iterator[TestClient]:
-    """TestClient with an isolated SQLite DB and a mock in-memory cache.
-
-    The ``StaticPool`` + ``check_same_thread=False`` dance is required so
-    that TestClient's threaded workers all see the same in-memory DB.
-    """
-    from sqlalchemy.pool import StaticPool
-
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-
-    # SQLite doesn't enforce BigInteger autoincrement the way Postgres does;
-    # force INTEGER PRIMARY KEY behaviour by listening for column compile.
-    # For our purposes, it's enough that inserts with explicit ids work.
-    _ = event  # silence unused import; kept for future hooks
-
-    Base.metadata.create_all(engine)
-
-    testing_session_local = sessionmaker(
-        autocommit=False, autoflush=False, bind=engine
-    )
-
-    with testing_session_local() as seed_session:
-        _seed_players(seed_session)
-
-    def _override_get_db() -> Iterator[Session]:
-        session = testing_session_local()
-        try:
-            yield session
-        finally:
-            session.close()
-
-    app.dependency_overrides[get_db] = _override_get_db
-
-    # fastapi-cache2 is initialised in the app lifespan, which TestClient
-    # triggers when used as a context manager. Redis isn't available in
-    # unit tests, so init will log-and-continue; the decorator then sees
-    # no backend and raises. To keep things simple and deterministic, we
-    # install an in-process InMemoryBackend for the duration of the test.
-    from fastapi_cache import FastAPICache
-    from fastapi_cache.backends.inmemory import InMemoryBackend
-
-    from app.core.cache import request_key_builder
-
-    FastAPICache.reset()
-    FastAPICache.init(
-        InMemoryBackend(),
-        prefix="test-cache",
-        key_builder=request_key_builder,
-    )
-
-    # We do NOT enter the lifespan ctx (to avoid the real Redis init).
-    with TestClient(app, raise_server_exceptions=True) as tc:
-        # TestClient enters lifespan; our FastAPICache.init above is idempotent
-        # (it no-ops on second call), so the one inside lifespan is a no-op
-        # because the class-level _init flag is already True.
-        yield tc
-
-    app.dependency_overrides.clear()
-    FastAPICache.reset()
-    Base.metadata.drop_all(engine)
-    engine.dispose()
+def _client(
+    seeded_session: Callable[..., Session],
+    make_client: Callable[[], TestClient],
+) -> TestClient:
+    """Seed the shared DB engine and return a live TestClient."""
+    session = seeded_session(_seed_players)
+    session.close()
+    return make_client()
 
 
 class TestAvailablePlayersLegacy:
     """The bare-array response shape is preserved when no paging params are sent."""
 
-    def test_returns_bare_array_without_params(self, client: TestClient) -> None:
+    def test_returns_bare_array_without_params(
+        self,
+        seeded_session: Callable[..., Session],
+        make_client: Callable[[], TestClient],
+    ) -> None:
+        client = _client(seeded_session, make_client)
         resp = client.get("/api/players/available")
         assert resp.status_code == 200
         body = resp.json()
@@ -179,7 +122,12 @@ class TestAvailablePlayersLegacy:
         # Each entry carries a season string
         assert all("season" in row for row in body)
 
-    def test_excludes_inactive_players(self, client: TestClient) -> None:
+    def test_excludes_inactive_players(
+        self,
+        seeded_session: Callable[..., Session],
+        make_client: Callable[[], TestClient],
+    ) -> None:
+        client = _client(seeded_session, make_client)
         resp = client.get("/api/players/available")
         assert resp.status_code == 200
         names = {row["name"] for row in resp.json()}
@@ -189,7 +137,12 @@ class TestAvailablePlayersLegacy:
 class TestAvailablePlayersPaginated:
     """Passing ``limit`` or ``offset`` opts into the envelope response."""
 
-    def test_envelope_shape_when_limit_passed(self, client: TestClient) -> None:
+    def test_envelope_shape_when_limit_passed(
+        self,
+        seeded_session: Callable[..., Session],
+        make_client: Callable[[], TestClient],
+    ) -> None:
+        client = _client(seeded_session, make_client)
         resp = client.get("/api/players/available?limit=2")
         assert resp.status_code == 200
         body = resp.json()
@@ -199,7 +152,12 @@ class TestAvailablePlayersPaginated:
         assert body["total"] == 6
         assert len(body["items"]) == 2
 
-    def test_envelope_shape_when_offset_passed(self, client: TestClient) -> None:
+    def test_envelope_shape_when_offset_passed(
+        self,
+        seeded_session: Callable[..., Session],
+        make_client: Callable[[], TestClient],
+    ) -> None:
+        client = _client(seeded_session, make_client)
         resp = client.get("/api/players/available?offset=2")
         assert resp.status_code == 200
         body = resp.json()
@@ -208,14 +166,24 @@ class TestAvailablePlayersPaginated:
         assert body["total"] == 6
         assert len(body["items"]) == 4
 
-    def test_offset_skips_correctly(self, client: TestClient) -> None:
+    def test_offset_skips_correctly(
+        self,
+        seeded_session: Callable[..., Session],
+        make_client: Callable[[], TestClient],
+    ) -> None:
+        client = _client(seeded_session, make_client)
         full = client.get("/api/players/available").json()
         page_one = client.get("/api/players/available?limit=2&offset=0").json()
         page_two = client.get("/api/players/available?limit=2&offset=2").json()
         assert [i["id"] for i in page_one["items"]] == [r["id"] for r in full[:2]]
         assert [i["id"] for i in page_two["items"]] == [r["id"] for r in full[2:4]]
 
-    def test_limit_validation(self, client: TestClient) -> None:
+    def test_limit_validation(
+        self,
+        seeded_session: Callable[..., Session],
+        make_client: Callable[[], TestClient],
+    ) -> None:
+        client = _client(seeded_session, make_client)
         # limit=0 -> 422 (ge=1)
         assert client.get("/api/players/available?limit=0").status_code == 422
         # limit=501 -> 422 (le=500)
@@ -227,7 +195,12 @@ class TestAvailablePlayersPaginated:
 class TestPlayerSearch:
     """The search endpoint falls back to ILIKE when pg_trgm is unavailable."""
 
-    def test_exact_substring_match(self, client: TestClient) -> None:
+    def test_exact_substring_match(
+        self,
+        seeded_session: Callable[..., Session],
+        make_client: Callable[[], TestClient],
+    ) -> None:
+        client = _client(seeded_session, make_client)
         resp = client.get("/api/players/search?q=Curry")
         assert resp.status_code == 200
         body = resp.json()
@@ -236,32 +209,62 @@ class TestPlayerSearch:
         # SQLite fallback path: similarity is always None
         assert body[0]["similarity"] is None
 
-    def test_case_insensitive_match(self, client: TestClient) -> None:
+    def test_case_insensitive_match(
+        self,
+        seeded_session: Callable[..., Session],
+        make_client: Callable[[], TestClient],
+    ) -> None:
+        client = _client(seeded_session, make_client)
         resp = client.get("/api/players/search?q=lebron")
         assert resp.status_code == 200
         names = [p["name"] for p in resp.json()]
         assert "LeBron James" in names
 
-    def test_excludes_inactive(self, client: TestClient) -> None:
+    def test_excludes_inactive(
+        self,
+        seeded_session: Callable[..., Session],
+        make_client: Callable[[], TestClient],
+    ) -> None:
+        client = _client(seeded_session, make_client)
         resp = client.get("/api/players/search?q=Retired")
         assert resp.status_code == 200
         assert resp.json() == []
 
-    def test_limit_param(self, client: TestClient) -> None:
+    def test_limit_param(
+        self,
+        seeded_session: Callable[..., Session],
+        make_client: Callable[[], TestClient],
+    ) -> None:
+        client = _client(seeded_session, make_client)
         resp = client.get("/api/players/search?q=e&limit=2")
         assert resp.status_code == 200
         assert len(resp.json()) <= 2
 
-    def test_missing_q_is_422(self, client: TestClient) -> None:
+    def test_missing_q_is_422(
+        self,
+        seeded_session: Callable[..., Session],
+        make_client: Callable[[], TestClient],
+    ) -> None:
+        client = _client(seeded_session, make_client)
         assert client.get("/api/players/search").status_code == 422
 
-    def test_empty_q_is_422(self, client: TestClient) -> None:
+    def test_empty_q_is_422(
+        self,
+        seeded_session: Callable[..., Session],
+        make_client: Callable[[], TestClient],
+    ) -> None:
+        client = _client(seeded_session, make_client)
         # min_length=1 rejects ""; trimming to "" after a non-empty q
         # (e.g. "   ") returns an empty list rather than 422.
         resp = client.get("/api/players/search?q=")
         assert resp.status_code == 422
 
-    def test_whitespace_only_q_returns_empty(self, client: TestClient) -> None:
+    def test_whitespace_only_q_returns_empty(
+        self,
+        seeded_session: Callable[..., Session],
+        make_client: Callable[[], TestClient],
+    ) -> None:
+        client = _client(seeded_session, make_client)
         resp = client.get("/api/players/search?q=%20%20%20")
         assert resp.status_code == 200
         assert resp.json() == []
