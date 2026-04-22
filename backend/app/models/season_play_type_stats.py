@@ -6,7 +6,7 @@ calculated metrics like PPP (points per possession), FG%, and frequency.
 
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, ForeignKey, Numeric, String
+from sqlalchemy import BigInteger, ForeignKey, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -24,6 +24,11 @@ class SeasonPlayTypeStats(Base):
     """
 
     __tablename__ = "season_play_type_stats"
+    __table_args__ = (
+        UniqueConstraint(
+            "player_id", "season", name="uq_season_play_type_stats_player_season"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     player_id: Mapped[int] = mapped_column(

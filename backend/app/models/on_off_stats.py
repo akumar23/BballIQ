@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, ForeignKey, Numeric, String
+from sqlalchemy import BigInteger, ForeignKey, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -14,6 +14,11 @@ class PlayerOnOffStats(Base):
     """
 
     __tablename__ = "player_on_off_stats"
+    __table_args__ = (
+        UniqueConstraint(
+            "player_id", "season", name="uq_player_on_off_stats_player_season"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     player_id: Mapped[int] = mapped_column(

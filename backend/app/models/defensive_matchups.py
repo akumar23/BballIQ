@@ -7,7 +7,7 @@ defense from synergy play type data.
 
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, ForeignKey, Integer, Numeric, String
+from sqlalchemy import BigInteger, ForeignKey, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -24,6 +24,11 @@ class PlayerDefensiveStats(Base):
     """
 
     __tablename__ = "player_defensive_stats"
+    __table_args__ = (
+        UniqueConstraint(
+            "player_id", "season", name="uq_player_defensive_stats_player_season"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     player_id: Mapped[int] = mapped_column(
