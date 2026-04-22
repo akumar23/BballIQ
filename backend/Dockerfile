@@ -14,7 +14,7 @@ RUN groupadd --system app && useradd --system --gid app --home /app --shell /usr
 
 # Copy dependency metadata first (before application code) for better Docker layer caching
 # This way code changes don't invalidate the pip install layer
-COPY pyproject.toml README.md ./
+COPY pyproject.toml ./
 
 # Install Python dependencies as root (required for pip)
 RUN pip install --no-cache-dir -e .
