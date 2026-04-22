@@ -12,6 +12,13 @@ spec:
     metadata:
       labels:
         app: backend
+      # Pod-level Prometheus scrape annotations. These are a no-op unless a
+      # Prometheus install with annotation-based discovery is running in the
+      # cluster; see k8s/observability-config.yaml for context.
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8000"
     spec:
       imagePullSecrets:
         - name: ghcr-pull-secret
@@ -30,6 +37,12 @@ spec:
         - name: backend
           image: ghcr.io/akumar23/nba-stats-backend:latest
           imagePullPolicy: Always
+          # Observability env (Sentry + structlog) loaded from the
+          # observability-config ConfigMap — apply k8s/observability-config.yaml
+          # before rolling this deployment.
+          envFrom:
+            - configMapRef:
+                name: observability-config
           env:
             - name: DATABASE_URL
               valueFrom:

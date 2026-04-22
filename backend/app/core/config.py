@@ -48,6 +48,20 @@ class Settings(BaseSettings):
     celery_schedule_hour: int = 6  # Hour to run daily refresh (UTC)
     celery_schedule_minute: int = 0  # Minute to run daily refresh
 
+    # Observability
+    # Sentry DSN is intentionally optional — when unset, ``init_sentry()`` is
+    # a no-op so local development does not require a Sentry project.
+    sentry_dsn: str | None = None
+    sentry_env: str = "production"
+    sentry_traces_sample_rate: float = 0.0  # Traces off by default; opt in via env.
+    git_sha: str | None = None  # Populated by CI for Sentry release tagging.
+
+    # Structured logging: JSON renderer in production, console renderer when
+    # ``log_json=False`` (handy for local dev). Level applies to both the
+    # stdlib root logger and structlog's default filtering logger.
+    log_level: str = "INFO"
+    log_json: bool = True
+
     class Config:
         env_file = ".env"
 

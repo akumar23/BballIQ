@@ -1,0 +1,31 @@
+# Observability configuration shared by the backend and Celery deployments.
+#
+# This ConfigMap holds *non-secret* toggles for Sentry, Prometheus scraping,
+# and structured logging. The Sentry DSN is technically a write-only URL and
+# does not need Secret-level protection, but feel free to move it into the
+# existing ``Secret`` machinery if your threat model prefers that.
+#
+# Fill in SENTRY_DSN before applying in production. An empty string keeps
+# ``init_sentry()`` as a no-op, which is the correct behaviour for local /
+# CI / staging clusters without a Sentry project.
+#
+# NOTE: The Prometheus scrape annotations on k8s/backend.yaml are a no-op
+# unless a Prometheus install with annotation-based discovery is running
+# in the cluster. This manifest deliberately does not install Prometheus.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: observability-config
+  namespace: nba-stats
+data:
+  # Leave blank until you create a Sentry project. When blank, the
+  # application silently skips Sentry init.
+  SENTRY_DSN: ""
+  SENTRY_ENV: "production"
+  # 0.0 disables Sentry performance tracing. Bump to e.g. "0.05" to sample
+  # 5% of transactions if/when you want latency traces.
+  SENTRY_TRACES_SAMPLE_RATE: "0.0"
+  # Structured-log toggles. LOG_JSON=false is handy for local dev where
+  # ConsoleRenderer output is easier to read than JSON.
+  LOG_LEVEL: "INFO"
+  LOG_JSON: "true"

@@ -27,6 +27,12 @@ spec:
             - --loglevel=info
             - --queues=data_refresh
             - --concurrency=1
+          # Observability env (Sentry + structlog) — same ConfigMap as the
+          # backend. The DSN is a write-only URL so using a ConfigMap
+          # instead of a Secret is a deliberate simplification.
+          envFrom:
+            - configMapRef:
+                name: observability-config
           env:
             - name: DATABASE_URL
               valueFrom:
@@ -84,6 +90,10 @@ spec:
             - app.core.celery_app
             - beat
             - --loglevel=info
+          # Observability env — see backend.yaml / observability-config.yaml.
+          envFrom:
+            - configMapRef:
+                name: observability-config
           env:
             - name: DATABASE_URL
               valueFrom:

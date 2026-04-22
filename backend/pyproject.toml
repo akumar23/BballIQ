@@ -21,6 +21,12 @@ dependencies = [
     "beautifulsoup4>=4.12.0",
     "lxml>=5.0.0",
     "fastapi-cache2[redis]>=0.2.1,<0.3",
+    # Observability: Sentry for error reporting (optional at runtime — skipped
+    # when SENTRY_DSN is unset), Prometheus metrics endpoint, structlog for
+    # JSON-formatted logs with per-request / per-task context.
+    "sentry-sdk[fastapi,celery,sqlalchemy,redis]>=2.0,<3.0",
+    "prometheus-fastapi-instrumentator>=7.0,<8.0",
+    "structlog>=24.1,<26.0",
 ]
 
 [project.optional-dependencies]
