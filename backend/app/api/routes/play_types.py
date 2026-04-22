@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from app.core.season import get_current_season
 from app.db.session import get_db
 from app.models import Player, SeasonPlayTypeStats
 from app.schemas.play_type import (
@@ -87,7 +88,7 @@ async def get_play_type_leaderboard(
     sort_by: Literal["ppp", "possessions", "fg_pct", "frequency"] = Query(
         default="ppp", description="Stat to sort by"
     ),
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     limit: int = Query(default=50, le=100),
     min_poss: int = Query(default=MIN_POSS_DEFAULT, description="Minimum possessions required"),
     db: Session = Depends(get_db),
@@ -105,6 +106,7 @@ async def get_play_type_leaderboard(
     Returns:
         PlayTypeLeaderboardResponse with entries sorted by the specified stat
     """
+    season = season or get_current_season()
     poss_col = getattr(SeasonPlayTypeStats, f"{play_type}_poss")
     sort_col_name = f"{play_type}_{sort_by}" if sort_by != "possessions" else f"{play_type}_poss"
 
@@ -153,7 +155,7 @@ async def get_play_type_leaderboard(
 
 @router.get("/players", response_model=list[PlayerPlayTypeStats])
 async def get_all_players_play_types(
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     limit: int = Query(default=50, le=100),
     offset: int = Query(default=0),
     db: Session = Depends(get_db),
@@ -169,6 +171,7 @@ async def get_all_players_play_types(
     Returns:
         List of PlayerPlayTypeStats for all players
     """
+    season = season or get_current_season()
     results = (
         db.query(Player, SeasonPlayTypeStats)
         .join(SeasonPlayTypeStats, Player.id == SeasonPlayTypeStats.player_id)
@@ -205,7 +208,7 @@ async def get_all_players_play_types(
 @router.get("/players/{player_id}", response_model=PlayerPlayTypeStats)
 async def get_player_play_types(
     player_id: int,
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     """Get detailed play type stats for a specific player.
@@ -221,6 +224,7 @@ async def get_player_play_types(
     Raises:
         HTTPException: If player or stats not found
     """
+    season = season or get_current_season()
     player = db.query(Player).filter(Player.id == player_id).first()
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")

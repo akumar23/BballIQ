@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
 
+from app.core.season import get_current_season
 from app.db.session import get_db
 from app.models import Player
 from app.models.advanced_stats import PlayerAdvancedStats
@@ -146,7 +147,7 @@ def _build_defensive_profile(
 
 @router.get("/advanced", response_model=list[PlayerAdvancedStatsResponse])
 async def get_advanced_stats(
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     limit: int = Query(default=50, le=500),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -158,6 +159,7 @@ async def get_advanced_stats(
         limit: Number of results (max 500)
         offset: Number of results to skip
     """
+    season = season or get_current_season()
     results = (
         db.query(Player, PlayerAdvancedStats, PlayerClutchStatsModel)
         .outerjoin(
@@ -186,7 +188,7 @@ async def get_advanced_stats(
 @router.get("/advanced/{player_id}", response_model=PlayerAdvancedStatsResponse)
 async def get_player_advanced_stats(
     player_id: int,
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     """Get advanced stats for a single player.
@@ -195,6 +197,7 @@ async def get_player_advanced_stats(
         player_id: Internal player ID
         season: NBA season string
     """
+    season = season or get_current_season()
     result = (
         db.query(Player, PlayerAdvancedStats, PlayerClutchStatsModel)
         .outerjoin(
@@ -221,7 +224,7 @@ async def get_player_advanced_stats(
 @router.get("/shot-zones/{player_id}", response_model=PlayerShotZones)
 async def get_player_shot_zones(
     player_id: int,
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     """Get shot zone distribution for a single player.
@@ -230,6 +233,7 @@ async def get_player_shot_zones(
         player_id: Internal player ID
         season: NBA season string
     """
+    season = season or get_current_season()
     player = db.query(Player).filter(Player.id == player_id).first()
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
@@ -274,7 +278,7 @@ async def get_player_shot_zones(
 
 @router.get("/defense/leaderboard", response_model=list[PlayerDefensiveProfile])
 async def get_defensive_leaderboard(
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     limit: int = Query(default=50, le=100),
     sort_by: Literal["rim", "overall", "three_point"] = Query(
         default="overall",
@@ -291,6 +295,7 @@ async def get_defensive_leaderboard(
         limit: Number of results (max 100)
         sort_by: Defensive category - 'rim', 'overall', or 'three_point'
     """
+    season = season or get_current_season()
     # Determine sort column (most negative pct_plusminus = best defender)
     sort_column = {
         "rim": PlayerDefensiveStatsModel.rim_pct_plusminus,
@@ -317,7 +322,7 @@ async def get_defensive_leaderboard(
 @router.get("/defense/{player_id}", response_model=PlayerDefensiveProfile)
 async def get_player_defensive_profile(
     player_id: int,
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     """Get defensive profile for a single player.
@@ -326,6 +331,7 @@ async def get_player_defensive_profile(
         player_id: Internal player ID
         season: NBA season string
     """
+    season = season or get_current_season()
     result = (
         db.query(Player, PlayerDefensiveStatsModel)
         .outerjoin(

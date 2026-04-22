@@ -1,15 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.core.season import get_current_season
 from app.db.session import get_db
-
 from app.models import (
     GameStats,
     Player,
     PlayerCareerStats,
     SeasonStats,
 )
-from app.schemas.player import PlayerDetail, PlayerList, PlayerCardOption
+from app.schemas.player import PlayerCardOption, PlayerDetail, PlayerList
 from app.schemas.player_card import PlayerCardData
 from app.services.player_card import PlayerCardService
 
@@ -30,7 +30,7 @@ async def get_seasons(db: Session = Depends(get_db)):
 
 @router.get("", response_model=list[PlayerList])
 async def get_players(
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     position: str | None = Query(default=None),
     team: str | None = Query(default=None),
     limit: int = Query(default=100, le=500),
@@ -38,6 +38,7 @@ async def get_players(
     db: Session = Depends(get_db),
 ):
     """Get all players with their current metrics."""
+    season = season or get_current_season()
     query = (
         db.query(Player, SeasonStats)
         .outerjoin(
@@ -108,10 +109,11 @@ async def get_available_players(
 @router.get("/{player_id}", response_model=PlayerDetail)
 async def get_player(
     player_id: int,
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     """Get a single player with detailed stats."""
+    season = season or get_current_season()
     player = db.query(Player).filter(Player.id == player_id).first()
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
@@ -154,10 +156,11 @@ async def get_player(
 @router.get("/{player_id}/games")
 async def get_player_games(
     player_id: int,
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     """Get all game logs for a player in a given season, ordered by date descending."""
+    season = season or get_current_season()
     player = db.query(Player).filter(Player.id == player_id).first()
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
@@ -202,9 +205,10 @@ async def get_player_games(
 @router.get("/{player_id}/card", response_model=PlayerCardData)
 async def get_player_card(
     player_id: int,
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     """Get comprehensive aggregated data for the player card page."""
+    season = season or get_current_season()
     service = PlayerCardService(db=db, player_id=player_id, season=season)
     return service.build()

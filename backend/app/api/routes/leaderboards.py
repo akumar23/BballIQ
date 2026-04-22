@@ -2,10 +2,11 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from app.core.season import get_current_season
 from app.db.session import get_db
 from app.models import Player, SeasonStats
-from app.schemas.player import PlayerList, PlayerPerGameStats
 from app.schemas.leaderboard import SeasonsList
+from app.schemas.player import PlayerList, PlayerPerGameStats
 
 router = APIRouter()
 
@@ -30,11 +31,12 @@ def _build_player_list(player: Player, stats: SeasonStats) -> PlayerList:
 
 @router.get("/offensive", response_model=list[PlayerList])
 async def get_offensive_leaderboard(
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     limit: int = Query(default=50, le=100),
     db: Session = Depends(get_db),
 ):
     """Get players ranked by offensive metric."""
+    season = season or get_current_season()
     results = (
         db.query(Player, SeasonStats)
         .join(SeasonStats, Player.id == SeasonStats.player_id)
@@ -50,11 +52,12 @@ async def get_offensive_leaderboard(
 
 @router.get("/defensive", response_model=list[PlayerList])
 async def get_defensive_leaderboard(
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     limit: int = Query(default=50, le=100),
     db: Session = Depends(get_db),
 ):
     """Get players ranked by defensive metric."""
+    season = season or get_current_season()
     results = (
         db.query(Player, SeasonStats)
         .join(SeasonStats, Player.id == SeasonStats.player_id)
@@ -70,12 +73,14 @@ async def get_defensive_leaderboard(
 
 @router.get("/per-game", response_model=list[PlayerPerGameStats])
 async def get_per_game_leaderboard(
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     limit: int = Query(default=50, le=100),
     sort_by: str = Query(default="ppg"),
     db: Session = Depends(get_db),
 ):
     """Get players ranked by per-game stats (ppg, rpg, apg, mpg, spg, bpg)."""
+    season = season or get_current_season()
+
     def per_game(total, gp):
         return round(total / gp, 1) if total and gp else None
 
@@ -111,11 +116,12 @@ async def get_per_game_leaderboard(
 
 @router.get("/overall", response_model=list[PlayerList])
 async def get_overall_leaderboard(
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     limit: int = Query(default=50, le=100),
     db: Session = Depends(get_db),
 ):
     """Get players ranked by overall (combined) metric."""
+    season = season or get_current_season()
     results = (
         db.query(Player, SeasonStats)
         .join(SeasonStats, Player.id == SeasonStats.player_id)

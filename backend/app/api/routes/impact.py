@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from app.core.season import get_current_season
 from app.db.session import get_db
 from app.models import ContextualizedImpact, Player, PlayerOnOffStats
 from app.schemas.impact import (
@@ -17,7 +18,7 @@ router = APIRouter()
 
 @router.get("/leaderboard", response_model=list[ImpactLeaderboardEntry])
 async def get_impact_leaderboard(
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     limit: int = Query(default=50, le=100),
     sort_by: str = Query(default="net", pattern="^(net|offense|defense)$"),
     db: Session = Depends(get_db),
@@ -29,6 +30,7 @@ async def get_impact_leaderboard(
         limit: Number of results (max 100)
         sort_by: Sort field - 'net', 'offense', or 'defense'
     """
+    season = season or get_current_season()
     # Determine sort column
     sort_column = {
         "net": ContextualizedImpact.contextualized_net_impact,
@@ -67,12 +69,13 @@ async def get_impact_leaderboard(
 
 @router.get("/players", response_model=list[PlayerImpact])
 async def get_all_player_impacts(
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     limit: int = Query(default=100, le=500),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
     """Get impact data for all players with pagination."""
+    season = season or get_current_season()
     results = (
         db.query(Player, PlayerOnOffStats, ContextualizedImpact)
         .outerjoin(PlayerOnOffStats, (Player.id == PlayerOnOffStats.player_id) & (PlayerOnOffStats.season == season))
@@ -93,10 +96,11 @@ async def get_all_player_impacts(
 @router.get("/players/{player_id}", response_model=PlayerImpact)
 async def get_player_impact(
     player_id: int,
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     """Get detailed impact data for a specific player."""
+    season = season or get_current_season()
     result = (
         db.query(Player, PlayerOnOffStats, ContextualizedImpact)
         .outerjoin(PlayerOnOffStats, (Player.id == PlayerOnOffStats.player_id) & (PlayerOnOffStats.season == season))

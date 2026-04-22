@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from app.core.season import get_current_season
 from app.db.session import get_db
 from app.models import Player
 from app.models.career_stats import PlayerCareerStats as PlayerCareerStatsModel
@@ -110,7 +111,7 @@ def _build_shooting_response(
 
 @router.get("/computed", response_model=list[PlayerComputedStatsResponse])
 async def get_computed_stats(
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     limit: int = Query(default=50, le=500),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -125,6 +126,7 @@ async def get_computed_stats(
         limit: Number of results (max 500)
         offset: Number of results to skip
     """
+    season = season or get_current_season()
     results = (
         db.query(Player, PlayerComputedAdvanced)
         .outerjoin(
@@ -148,7 +150,7 @@ async def get_computed_stats(
 @router.get("/computed/{player_id}", response_model=PlayerComputedStatsResponse)
 async def get_player_computed_stats(
     player_id: int,
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     """Get computed advanced stats for a single player.
@@ -157,6 +159,7 @@ async def get_player_computed_stats(
         player_id: Internal player ID
         season: NBA season string
     """
+    season = season or get_current_season()
     result = (
         db.query(Player, PlayerComputedAdvanced)
         .outerjoin(
@@ -228,7 +231,7 @@ async def get_player_career(
 
 @router.get("/shooting", response_model=list[PlayerShootingTrackingResponse])
 async def get_shooting_tracking(
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     limit: int = Query(default=50, le=500),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -240,6 +243,7 @@ async def get_shooting_tracking(
         limit: Number of results (max 500)
         offset: Number of results to skip
     """
+    season = season or get_current_season()
     results = (
         db.query(Player, PlayerShootingTracking)
         .outerjoin(
@@ -263,7 +267,7 @@ async def get_shooting_tracking(
 @router.get("/shooting/{player_id}", response_model=PlayerShootingTrackingResponse)
 async def get_player_shooting_tracking(
     player_id: int,
-    season: str = Query(default="2024-25"),
+    season: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     """Get shooting tracking stats for a single player.
@@ -272,6 +276,7 @@ async def get_player_shooting_tracking(
         player_id: Internal player ID
         season: NBA season string
     """
+    season = season or get_current_season()
     result = (
         db.query(Player, PlayerShootingTracking)
         .outerjoin(
