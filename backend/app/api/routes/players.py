@@ -1,4 +1,27 @@
+"""Players API routes.
+
+A few endpoints in here are on the hot path for the dashboard:
+
+* ``/available`` powers the player-card selector and is called on every
+  dashboard load. 300s TTL via fastapi-cache2 — the underlying data (which
+  players have career stats rows) only changes when the nightly refresh
+  runs.
+* ``/{player_id}`` powers the player detail view. 60s TTL — short enough
+  that freshly-seeded data shows up quickly, long enough to absorb
+  bursty reads.
+* ``/{player_id}/games`` (gamelog) is intentionally NOT cached — responses
+  are per-player large and the TTL wouldn't help much for the
+  low-cardinality access pattern.
+"""
+
+from __future__ import annotations
+
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi_cache.decorator import cache
+from sqlalchemy import func
+from sqlalchemy.exc import DBAPIError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from app.core.season import get_current_season
@@ -9,11 +32,24 @@ from app.models import (
     PlayerCareerStats,
     SeasonStats,
 )
-from app.schemas.player import PlayerCardOption, PlayerDetail, PlayerList
+from app.schemas.player import (
+    PlayerCardOption,
+    PlayerCardOptionPage,
+    PlayerDetail,
+    PlayerList,
+    PlayerSearchResult,
+)
 from app.schemas.player_card import PlayerCardData
 from app.services.player_card import PlayerCardService
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+# Per-player detail is a small fixed-size payload; 60s is plenty.
+_PLAYER_DETAIL_TTL = 60
+# ``/available`` data only changes on the nightly refresh; 5 min is safe.
+_AVAILABLE_TTL = 300
 
 
 @router.get("/seasons", response_model=list[str])
@@ -76,25 +112,78 @@ async def get_players(
     ]
 
 
-@router.get("/available", response_model=list[PlayerCardOption])
+@router.get("/available")
+@cache(expire=_AVAILABLE_TTL)
 async def get_available_players(
+    limit: int | None = Query(
+        default=None,
+        ge=1,
+        le=500,
+        description="Page size. Pass together with ``offset`` to opt into the paginated envelope.",
+    ),
+    offset: int | None = Query(
+        default=None,
+        ge=0,
+        description=(
+            "Page offset. Passing either ``limit`` or ``offset`` switches "
+            "the response to the paginated envelope."
+        ),
+    ),
     db: Session = Depends(get_db),
-):
+) -> list[PlayerCardOption] | PlayerCardOptionPage:
     """Get all players with every season they have data for, for the card selector.
 
-    Returns a flat list sorted by player name then season descending.
+    Returns a flat list sorted by ``player.name`` then ``season`` descending.
     Each entry represents a distinct player+season combination that has
     career stats in the database.
+
+    Response shape:
+
+    * If neither ``limit`` nor ``offset`` is passed, returns a bare list
+      (legacy shape — the frontend still consumes this).
+    * If either is passed, returns ``{"items": [...], "total": N, "limit": L, "offset": O}``.
+
+    TODO(api-v2): remove the legacy bare-array branch once the frontend is
+    migrated to always paginate. Tracked in follow-up ticket.
     """
-    rows = (
+    paginated = limit is not None or offset is not None
+
+    base_query = (
         db.query(Player, PlayerCareerStats.season)
         .join(PlayerCareerStats, Player.id == PlayerCareerStats.player_id)
         .filter(Player.active == True)
         .order_by(Player.name, PlayerCareerStats.season.desc())
-        .all()
     )
 
-    return [
+    if not paginated:
+        rows = base_query.all()
+        return [
+            PlayerCardOption(
+                id=player.id,
+                name=player.name,
+                position=player.position,
+                team_abbreviation=player.team_abbreviation,
+                season=season,
+            )
+            for player, season in rows
+        ]
+
+    effective_limit = limit if limit is not None else 50
+    effective_offset = offset if offset is not None else 0
+
+    # Count before slicing. Use the same join so ``total`` matches the set
+    # being paginated, not ``SELECT COUNT(*) FROM players``.
+    total = (
+        db.query(func.count())
+        .select_from(Player)
+        .join(PlayerCareerStats, Player.id == PlayerCareerStats.player_id)
+        .filter(Player.active.is_(True))
+        .scalar()
+    ) or 0
+
+    page_rows = base_query.offset(effective_offset).limit(effective_limit).all()
+
+    items = [
         PlayerCardOption(
             id=player.id,
             name=player.name,
@@ -102,11 +191,93 @@ async def get_available_players(
             team_abbreviation=player.team_abbreviation,
             season=season,
         )
-        for player, season in rows
+        for player, season in page_rows
+    ]
+
+    return PlayerCardOptionPage(
+        items=items,
+        total=int(total),
+        limit=effective_limit,
+        offset=effective_offset,
+    )
+
+
+@router.get("/search", response_model=list[PlayerSearchResult])
+async def search_players(
+    q: str = Query(..., min_length=1, max_length=100, description="Free-form name query."),
+    limit: int = Query(default=20, ge=1, le=50),
+    db: Session = Depends(get_db),
+) -> list[PlayerSearchResult]:
+    """Fuzzy search on players by name.
+
+    Uses Postgres ``pg_trgm`` trigram similarity when available (see the
+    ``ix_players_name_trgm`` migration). Falls back to a case-insensitive
+    substring match if the extension isn't installed — less forgiving on
+    typos but still useful and keeps the endpoint responsive in tests
+    or environments where the extension hasn't been provisioned.
+    """
+    q_normalized = q.strip()
+    if not q_normalized:
+        return []
+
+    try:
+        similarity = func.similarity(Player.name, q_normalized)
+        rows = (
+            db.query(Player, similarity.label("similarity"))
+            .filter(Player.active.is_(True))
+            .filter(Player.name.op("%")(q_normalized))
+            .order_by(similarity.desc())
+            .limit(limit)
+            .all()
+        )
+        return [
+            PlayerSearchResult(
+                id=player.id,
+                nba_id=player.nba_id,
+                name=player.name,
+                position=player.position,
+                team_abbreviation=player.team_abbreviation,
+                similarity=float(score) if score is not None else None,
+            )
+            for player, score in rows
+        ]
+    except (ProgrammingError, DBAPIError) as exc:
+        # pg_trgm extension missing (undefined_function on ``similarity``
+        # / ``%`` operator). Roll back and fall through to the
+        # portable ILIKE path so the endpoint still returns something
+        # useful instead of 500-ing.
+        db.rollback()
+        logger.warning(
+            "pg_trgm unavailable for /players/search, falling back to ILIKE: %s",
+            exc,
+        )
+
+    # Fallback path. No ordering by similarity is possible here, so we
+    # stabilise by name to give deterministic responses.
+    like_pattern = f"%{q_normalized}%"
+    fallback_rows = (
+        db.query(Player)
+        .filter(Player.active.is_(True))
+        .filter(Player.name.ilike(like_pattern))
+        .order_by(Player.name)
+        .limit(limit)
+        .all()
+    )
+    return [
+        PlayerSearchResult(
+            id=player.id,
+            nba_id=player.nba_id,
+            name=player.name,
+            position=player.position,
+            team_abbreviation=player.team_abbreviation,
+            similarity=None,
+        )
+        for player in fallback_rows
     ]
 
 
 @router.get("/{player_id}", response_model=PlayerDetail)
+@cache(expire=_PLAYER_DETAIL_TTL)
 async def get_player(
     player_id: int,
     season: str | None = Query(default=None),

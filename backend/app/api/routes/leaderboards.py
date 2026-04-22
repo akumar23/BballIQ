@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query
+from fastapi_cache.decorator import cache
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
@@ -9,6 +10,11 @@ from app.schemas.leaderboard import SeasonsList
 from app.schemas.player import PlayerList, PlayerPerGameStats
 
 router = APIRouter()
+
+# 60s TTL across the board: these are read-only derived views of season
+# aggregates that don't change within a single poll interval. Safe to cache
+# publicly because none of these endpoints are user-scoped.
+_LEADERBOARD_TTL = 60
 
 
 def _build_player_list(player: Player, stats: SeasonStats) -> PlayerList:
@@ -30,6 +36,7 @@ def _build_player_list(player: Player, stats: SeasonStats) -> PlayerList:
 
 
 @router.get("/offensive", response_model=list[PlayerList])
+@cache(expire=_LEADERBOARD_TTL)
 async def get_offensive_leaderboard(
     season: str | None = Query(default=None),
     limit: int = Query(default=50, le=100),
@@ -51,6 +58,7 @@ async def get_offensive_leaderboard(
 
 
 @router.get("/defensive", response_model=list[PlayerList])
+@cache(expire=_LEADERBOARD_TTL)
 async def get_defensive_leaderboard(
     season: str | None = Query(default=None),
     limit: int = Query(default=50, le=100),
@@ -72,6 +80,7 @@ async def get_defensive_leaderboard(
 
 
 @router.get("/per-game", response_model=list[PlayerPerGameStats])
+@cache(expire=_LEADERBOARD_TTL)
 async def get_per_game_leaderboard(
     season: str | None = Query(default=None),
     limit: int = Query(default=50, le=100),
@@ -115,6 +124,7 @@ async def get_per_game_leaderboard(
 
 
 @router.get("/overall", response_model=list[PlayerList])
+@cache(expire=_LEADERBOARD_TTL)
 async def get_overall_leaderboard(
     season: str | None = Query(default=None),
     limit: int = Query(default=50, le=100),
@@ -135,10 +145,11 @@ async def get_overall_leaderboard(
     return [_build_player_list(player, stats) for player, stats in results]
 
 @router.get("/seasons", response_model=list[SeasonsList])
+@cache(expire=_LEADERBOARD_TTL)
 async def get_leaderboard_seasons(
     db: Session = Depends(get_db)
 ):
-    
+
     """Get list of seasons with available leaderboard data."""
     results = (
         db.query(SeasonStats.season)

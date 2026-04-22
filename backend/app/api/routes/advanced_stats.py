@@ -3,6 +3,7 @@
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi_cache.decorator import cache
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
 
@@ -25,6 +26,11 @@ from app.schemas.advanced_stats import (
 )
 
 router = APIRouter()
+
+# Season-level GETs below use a 60s TTL. Per-player endpoints intentionally
+# bypass the cache per product requirements (short TTL doesn't save much on
+# single-row reads and the response shapes can be per-player large).
+_ADVANCED_STATS_TTL = 60
 
 
 def _build_advanced_stats_response(
@@ -146,6 +152,7 @@ def _build_defensive_profile(
 
 
 @router.get("/advanced", response_model=list[PlayerAdvancedStatsResponse])
+@cache(expire=_ADVANCED_STATS_TTL)
 async def get_advanced_stats(
     season: str | None = Query(default=None),
     limit: int = Query(default=50, le=500),
@@ -277,6 +284,7 @@ async def get_player_shot_zones(
 
 
 @router.get("/defense/leaderboard", response_model=list[PlayerDefensiveProfile])
+@cache(expire=_ADVANCED_STATS_TTL)
 async def get_defensive_leaderboard(
     season: str | None = Query(default=None),
     limit: int = Query(default=50, le=100),
