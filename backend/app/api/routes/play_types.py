@@ -10,10 +10,10 @@ from app.core.season import get_current_season
 from app.db.session import get_db
 from app.models import Player, SeasonPlayTypeStats
 from app.schemas.play_type import (
+    PlayerPlayTypeStats,
     PlayTypeLeaderboardEntry,
     PlayTypeLeaderboardResponse,
     PlayTypeMetrics,
-    PlayerPlayTypeStats,
     SpotUpMetrics,
 )
 

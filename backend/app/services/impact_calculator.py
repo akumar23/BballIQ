@@ -12,7 +12,6 @@ from decimal import Decimal
 
 from app.services.nba_data import LineupData, PlayerOnOffData
 
-
 # Constants for impact calculation
 LEAGUE_AVG_NET_RATING = Decimal("0.0")  # League average net rating is ~0
 MIN_MINUTES_THRESHOLD = Decimal("100")  # Minimum minutes for reliable impact

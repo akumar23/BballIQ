@@ -27,7 +27,6 @@ from app.services.redis_cache import (
     redis_cache,
 )
 
-
 logger = logging.getLogger(__name__)
 
 

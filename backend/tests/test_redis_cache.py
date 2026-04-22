@@ -15,10 +15,10 @@ import json
 import time
 from datetime import datetime
 from decimal import Decimal
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
-import pytest
 import fakeredis
+import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
 
 from app.services.redis_cache import (
@@ -26,7 +26,6 @@ from app.services.redis_cache import (
     DecimalEncoder,
     RedisCacheService,
     get_cached_or_fetch,
-    redis_cache,
 )
 
 

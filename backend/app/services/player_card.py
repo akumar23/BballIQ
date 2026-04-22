@@ -41,8 +41,8 @@ from app.models.clutch_stats import PlayerClutchStats
 from app.models.game_stats import GameStats
 from app.models.per_75_stats import Per75Stats
 from app.schemas.player_card import (
-    CardAdvanced,
     CardAdjustmentStep,
+    CardAdvanced,
     CardAllInOne,
     CardCareerSeason,
     CardChampionship,
@@ -1010,13 +1010,13 @@ class PlayerCardService:
         if on_off and on_off.on_court_net_rating is not None:
             team_baseline = on_off.on_court_net_rating
 
-        FULL_RELIABILITY_MINUTES = Decimal("200")
+        full_reliability_minutes = Decimal("200")
 
         def _lineup_ctx_net(raw_net: Decimal | None, minutes: Decimal | None) -> Decimal:
             if raw_net is None:
                 return team_baseline
             mins = minutes or Decimal("0")
-            ratio = mins / FULL_RELIABILITY_MINUTES
+            ratio = mins / full_reliability_minutes
             reliability = min(
                 Decimal("1"),
                 ratio.sqrt() if hasattr(ratio, "sqrt") else Decimal(str(float(ratio) ** 0.5)),

@@ -12,7 +12,7 @@ import json
 import logging
 from datetime import datetime
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 from typing import Any, TypeVar
 
 import redis
@@ -20,14 +20,13 @@ from redis.exceptions import ConnectionError, RedisError, TimeoutError
 
 from app.core.config import settings
 
-
 logger = logging.getLogger(__name__)
 
 # Type variable for generic cache operations
 T = TypeVar("T")
 
 
-class CacheKeyPrefix(str, Enum):
+class CacheKeyPrefix(StrEnum):
     """Cache key prefixes for different data types."""
 
     NBA_PLAYERS = "nba:players"

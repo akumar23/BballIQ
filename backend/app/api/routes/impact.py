@@ -79,7 +79,10 @@ async def get_all_player_impacts(
     results = (
         db.query(Player, PlayerOnOffStats, ContextualizedImpact)
         .outerjoin(PlayerOnOffStats, (Player.id == PlayerOnOffStats.player_id) & (PlayerOnOffStats.season == season))
-        .outerjoin(ContextualizedImpact, (Player.id == ContextualizedImpact.player_id) & (ContextualizedImpact.season == season))
+        .outerjoin(
+            ContextualizedImpact,
+            (Player.id == ContextualizedImpact.player_id) & (ContextualizedImpact.season == season),
+        )
         .filter(PlayerOnOffStats.on_court_minutes.isnot(None))
         .order_by(desc(ContextualizedImpact.contextualized_net_impact))
         .offset(offset)
@@ -104,7 +107,10 @@ async def get_player_impact(
     result = (
         db.query(Player, PlayerOnOffStats, ContextualizedImpact)
         .outerjoin(PlayerOnOffStats, (Player.id == PlayerOnOffStats.player_id) & (PlayerOnOffStats.season == season))
-        .outerjoin(ContextualizedImpact, (Player.id == ContextualizedImpact.player_id) & (ContextualizedImpact.season == season))
+        .outerjoin(
+            ContextualizedImpact,
+            (Player.id == ContextualizedImpact.player_id) & (ContextualizedImpact.season == season),
+        )
         .filter(Player.id == player_id)
         .first()
     )

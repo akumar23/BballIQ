@@ -19,7 +19,6 @@ from urllib3.util.retry import Retry
 
 from app.core.config import settings
 
-
 logger = logging.getLogger(__name__)
 
 

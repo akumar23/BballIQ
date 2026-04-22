@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from app.services.metrics_utils import safe_div, safe_float
 
-
 # Minimum games required for clutch EPA calculation
 MIN_CLUTCH_GAMES = 10
 

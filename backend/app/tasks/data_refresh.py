@@ -36,6 +36,9 @@ BATCH_COMMIT_SIZE = 50
 # Surfaces systemic issues (10% of players failing is not "success").
 ERROR_THRESHOLD_RATIO = 0.1
 
+# Minimum possessions for a player's play-type split to qualify for leaderboards.
+MIN_PLAY_TYPE_POSSESSIONS = 50
+
 # Exceptions worth retrying: transient network / upstream / DB connection
 # issues. Programming errors (KeyError, TypeError, ValueError, ...) are NOT
 # in this list — those should fail fast so they can be fixed.
@@ -627,8 +630,6 @@ def refresh_play_type_data(self, season: str | None = None) -> dict[str, object]
     season = season or get_current_season()
     logger.info("Starting play type data refresh for season %s", season)
 
-    MIN_POSS_THRESHOLD = 50
-
     db = SessionLocal()
     try:
         service = NBADataService(bypass_cache=True)
@@ -731,7 +732,7 @@ def refresh_play_type_data(self, season: str | None = None) -> dict[str, object]
 
             qualified = [
                 s for s in stats_list
-                if (getattr(s, poss_attr) or 0) >= MIN_POSS_THRESHOLD
+                if (getattr(s, poss_attr) or 0) >= MIN_PLAY_TYPE_POSSESSIONS
                 and getattr(s, ppp_attr) is not None
             ]
 
@@ -860,7 +861,7 @@ def refresh_advanced_data(self, season: str | None = None) -> dict[str, object]:
             league_averages = service.get_league_shot_averages(season)
         except (CircuitBreakerError, RateLimitError) as e:
             logger.error("Failed to fetch league shot averages: %s", e, exc_info=True)
-            league_averages = {}
+            league_averages = []
 
         # Collect all player IDs
         all_player_ids: set[int] = set()
@@ -1039,13 +1040,10 @@ def refresh_advanced_data(self, season: str | None = None) -> dict[str, object]:
 
         # Store shot zone data (three-column composite key)
         league_avg_lookup: dict[str, object] = {}
-        if isinstance(league_averages, list):
-            for zone_data in league_averages:
-                zone_name = zone_data.get("ZONE_NAME") or zone_data.get("SHOT_ZONE_BASIC")
-                if zone_name:
-                    league_avg_lookup[zone_name] = safe_decimal(zone_data.get("FG_PCT"))
-        elif isinstance(league_averages, dict):
-            league_avg_lookup = {k: safe_decimal(v) for k, v in league_averages.items()}
+        for zone_data in league_averages:
+            zone_name = zone_data.get("ZONE_NAME") or zone_data.get("SHOT_ZONE_BASIC")
+            if zone_name:
+                league_avg_lookup[zone_name] = safe_decimal(zone_data.get("FG_PCT"))
 
         shot_total = len(shot_data)
         shot_processed = 0

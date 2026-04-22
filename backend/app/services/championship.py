@@ -243,7 +243,6 @@ class ChampionshipCalculator:
         clutch_pts = safe_float(self.clutch.pts)
         clutch_fga = safe_float(self.clutch.fga)
         clutch_fta = safe_float(self.clutch.fta)
-        clutch_fg3m = safe_float(self.clutch.fg3m)
 
         # Clutch TS%
         total_fga = clutch_fga * gp

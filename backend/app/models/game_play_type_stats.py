@@ -12,9 +12,8 @@ Stores per-game offensive play type stats for each player, including:
 """
 
 from datetime import date
-from decimal import Decimal
 
-from sqlalchemy import BigInteger, Date, ForeignKey, Numeric, String
+from sqlalchemy import BigInteger, Date, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base

@@ -16,7 +16,7 @@ References:
 """
 
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 
 # Minimum minutes for a player to qualify
 MIN_MINUTES_THRESHOLD = Decimal("100")
@@ -293,12 +293,9 @@ class BPMCalculator:
             # Adjustment = difference spread proportionally by minutes
             gap = team_net_rating - team_avg_raw_bpm
 
+            # Distribute evenly per minute: gap is per-minute, so every player on
+            # the team gets the same additive adjustment regardless of minute share.
             for p in team_players:
-                minute_share = p.minutes / total_minutes
-                # Distribute proportionally (players with more minutes get more adjustment)
-                player_adjustment = gap * minute_share * (total_minutes / p.minutes) if p.minutes > 0 else Decimal("0")
-                # Actually, distribute evenly per minute: each player gets the same per-minute adjustment
-                # gap is per-minute, so just add gap to each player
                 adjusted[p.player_id] = raw_bpms[p.player_id] + gap
 
         return adjusted

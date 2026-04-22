@@ -11,30 +11,30 @@ import logging
 import time
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Optional, TypeVar
+from typing import Any, TypeVar
 
 from nba_api.stats.endpoints import (
     CommonAllPlayers,
     LeagueDashPlayerStats,
 )
+from nba_api.stats.endpoints.leaguedashlineups import LeagueDashLineups
 from nba_api.stats.endpoints.leaguedashplayerbiostats import (
     LeagueDashPlayerBioStats,
 )
-from nba_api.stats.endpoints.leaguedashplayerptshot import LeagueDashPlayerPtShot
-from nba_api.stats.endpoints.playergamelogs import PlayerGameLogs
-from nba_api.stats.endpoints.leaguedashteamstats import LeagueDashTeamStats
-from nba_api.stats.endpoints.playercareerstats import PlayerCareerStats
-from nba_api.stats.endpoints.leaguedashlineups import LeagueDashLineups
 from nba_api.stats.endpoints.leaguedashplayerclutch import LeagueDashPlayerClutch
+from nba_api.stats.endpoints.leaguedashplayerptshot import LeagueDashPlayerPtShot
 from nba_api.stats.endpoints.leaguedashplayershotlocations import (
     LeagueDashPlayerShotLocations,
 )
 from nba_api.stats.endpoints.leaguedashptdefend import LeagueDashPtDefend
 from nba_api.stats.endpoints.leaguedashptstats import LeagueDashPtStats
+from nba_api.stats.endpoints.leaguedashteamstats import LeagueDashTeamStats
 from nba_api.stats.endpoints.leaguehustlestatsplayer import LeagueHustleStatsPlayer
+from nba_api.stats.endpoints.leagueseasonmatchups import LeagueSeasonMatchups
+from nba_api.stats.endpoints.playercareerstats import PlayerCareerStats
+from nba_api.stats.endpoints.playergamelogs import PlayerGameLogs
 from nba_api.stats.endpoints.shotchartleaguewide import ShotChartLeagueWide
 from nba_api.stats.endpoints.synergyplaytypes import SynergyPlayTypes
-from nba_api.stats.endpoints.leagueseasonmatchups import LeagueSeasonMatchups
 from nba_api.stats.endpoints.teamplayeronoffsummary import TeamPlayerOnOffSummary
 from nba_api.stats.static import teams as nba_teams
 
@@ -50,7 +50,6 @@ from app.services.redis_cache import (
     CacheKeyPrefix,
     redis_cache,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -713,7 +712,7 @@ class NBADataService:
     def get_all_on_off_stats(
         self,
         season: str = "2024-25",
-        progress_callback: Optional[callable] = None,
+        progress_callback: callable | None = None,
     ) -> dict[int, PlayerOnOffData]:
         """Get on/off stats for all players across all teams.
 
@@ -954,17 +953,12 @@ class NBADataService:
         print("  - Fetching hustle stats...")
         hustle = {p["PLAYER_ID"]: p for p in self.get_hustle_stats(season)}
 
-        logger.info("Fetching defensive stats...")
-        print("  - Fetching defensive stats...")
-        defense = {p["CLOSE_DEF_PERSON_ID"]: p for p in self.get_defensive_stats(season)}
-
         # Combine into PlayerTrackingData objects
         combined: dict[int, PlayerTrackingData] = {}
 
         for player_id, trad in traditional.items():
             touch = touches.get(player_id, {})
             hust = hustle.get(player_id, {})
-            defn = defense.get(player_id, {})
 
             # Skip players with no touch data
             if not touch.get("TOUCHES"):
@@ -1096,7 +1090,7 @@ class NBADataService:
     def fetch_all_play_type_data(
         self,
         season: str = "2024-25",
-        progress_callback: Optional[callable] = None,
+        progress_callback: callable | None = None,
     ) -> dict[int, PlayerPlayTypeData]:
         """Fetch and combine play type data for all players.
 
@@ -2186,7 +2180,7 @@ class NBADataService:
     def fetch_all_defensive_play_type_data(
         self,
         season: str = "2024-25",
-        progress_callback: Optional[callable] = None,
+        progress_callback: callable | None = None,
     ) -> dict[int, PlayerDefensivePlayTypeData]:
         """Fetch and combine defensive play type data for all players.
 

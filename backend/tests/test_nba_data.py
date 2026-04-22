@@ -8,19 +8,17 @@ This module tests:
 - Error handling for rate limits and server errors
 """
 
-from unittest.mock import MagicMock, patch, PropertyMock
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.services.nba_data import (
     NBADataService,
     PlayerTrackingData,
-    nba_data_service,
 )
 from app.services.rate_limiter import (
     CircuitBreakerError,
-    CircuitState,
     RateLimitError,
 )
 

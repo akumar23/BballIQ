@@ -6,30 +6,30 @@ from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
-# Import Base and all models to ensure they're registered with metadata
-from app.models.base import Base
-from app.models import (  # noqa: F401
-    Player,
-    GameStats,
-    SeasonStats,
-    Per75Stats,
-    PlayerOnOffStats,
-    ContextualizedImpact,
-    GamePlayTypeStats,
-    SeasonPlayTypeStats,
-    PlayerAdvancedStats,
-    PlayerShotZones,
-    PlayerClutchStats,
-    PlayerDefensiveStats,
-    PlayerComputedAdvanced,
-    PlayerCareerStats,
-    PlayerShootingTracking,
-    PlayerMatchups,
-    PlayerAllInOneMetrics,
-)
-
 # Import settings to get database URL
 from app.core.config import settings
+from app.models import (  # noqa: F401
+    ContextualizedImpact,
+    GamePlayTypeStats,
+    GameStats,
+    Per75Stats,
+    Player,
+    PlayerAdvancedStats,
+    PlayerAllInOneMetrics,
+    PlayerCareerStats,
+    PlayerClutchStats,
+    PlayerComputedAdvanced,
+    PlayerDefensiveStats,
+    PlayerMatchups,
+    PlayerOnOffStats,
+    PlayerShootingTracking,
+    PlayerShotZones,
+    SeasonPlayTypeStats,
+    SeasonStats,
+)
+
+# Import Base and all models to ensure they're registered with metadata
+from app.models.base import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

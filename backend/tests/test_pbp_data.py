@@ -8,7 +8,6 @@ This module tests:
 - Multiple game fetching with error recovery
 """
 
-import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -16,8 +15,6 @@ import pytest
 from app.services.pbp_data import (
     PBPStatsService,
     PossessionStats,
-    pbp_stats_circuit_breaker,
-    pbp_stats_service,
 )
 from app.services.rate_limiter import (
     CircuitBreakerError,
@@ -407,7 +404,7 @@ class TestGetMultipleGamePossessions:
 
             with patch.object(service, "get_game_possessions", side_effect=mock_get):
                 with patch("time.sleep"):
-                    result = service.get_multiple_game_possessions(game_ids)
+                    service.get_multiple_game_possessions(game_ids)
 
             # First game should have been retried after recovery
             assert call_count >= 2

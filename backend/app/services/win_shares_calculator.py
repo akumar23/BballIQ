@@ -21,7 +21,7 @@ References:
 """
 
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 
 # Minimum minutes for a player to qualify
 MIN_MINUTES_THRESHOLD = Decimal("100")
