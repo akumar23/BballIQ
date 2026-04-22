@@ -1,5 +1,5 @@
-# Backend Dockerfile
-FROM python:3.11-slim
+# Backend Dockerfile - production-ready with security hardening
+FROM python:3.11-slim-bookworm
 
 WORKDIR /app
 
@@ -9,21 +9,37 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy application code first (needed for editable install)
-COPY . .
+# Create non-root user and group
+RUN groupadd --system app && useradd --system --gid app --home /app --shell /usr/sbin/nologin app
 
-# Install Python dependencies
+# Copy dependency metadata first (before application code) for better Docker layer caching
+# This way code changes don't invalidate the pip install layer
+COPY pyproject.toml README.md ./
+
+# Install Python dependencies as root (required for pip)
 RUN pip install --no-cache-dir -e .
 
-# Create data directory for caching
-RUN mkdir -p /app/data/nba_api_cache
+# Create data directory and set ownership
+RUN mkdir -p /app/data/nba_api_cache && chown -R app:app /app/data
+
+# Copy application code (after deps are installed)
+COPY --chown=app:app . .
+
+# Copy and configure entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh && chown app:app /entrypoint.sh
+
+# Switch to non-root user for runtime
+USER app
 
 # Expose port
 EXPOSE 8000
 
+# Health check - the FastAPI app exposes /health endpoint
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()" || exit 1
+
 # Entrypoint runs migrations before the main command
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 
 # Run the application
