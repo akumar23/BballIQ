@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 
 interface SeasonContextValue {
@@ -16,21 +17,26 @@ const SeasonContext = createContext<SeasonContextValue>({
 })
 
 export function SeasonProvider({ children }: { children: ReactNode }) {
-  const [availableSeasons, setAvailableSeasons] = useState<string[]>([])
-  const [season, setSeason] = useState('2024-25')
-  const [seasonsLoaded, setSeasonsLoaded] = useState(false)
+  // Delegate the fetch to React Query so error/retry/cache behavior is consistent
+  // with the rest of the app. The provider still exposes the same shape.
+  const { data, isSuccess, isError } = useQuery({
+    queryKey: ['seasons'],
+    queryFn: () => api.seasons.list(),
+  })
 
+  const availableSeasons = data ?? []
+  const [season, setSeason] = useState('2024-25')
+  const [hasDefaulted, setHasDefaulted] = useState(false)
+  const seasonsLoaded = isSuccess || isError
+
+  // Default the active season to the first returned entry on initial load,
+  // matching the previous provider's behavior. Only runs once.
   useEffect(() => {
-    api.seasons.list()
-      .then(seasons => {
-        setAvailableSeasons(seasons)
-        if (seasons.length > 0) {
-          setSeason(seasons[0])
-        }
-        setSeasonsLoaded(true)
-      })
-      .catch(() => setSeasonsLoaded(true))
-  }, [])
+    if (!hasDefaulted && isSuccess && availableSeasons.length > 0) {
+      setSeason(availableSeasons[0])
+      setHasDefaulted(true)
+    }
+  }, [hasDefaulted, isSuccess, availableSeasons])
 
   return (
     <SeasonContext.Provider value={{ season, setSeason, availableSeasons, seasonsLoaded }}>

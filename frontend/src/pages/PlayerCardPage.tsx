@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import type { CortexPlayer } from '@/data/cortexTypes'
-import type { PlayerCardOption } from '@/types'
 import { api } from '@/lib/api'
 import { mapApiToPlayer } from '@/lib/playerMapper'
 import OverviewTab from '@/components/cortex/OverviewTab'
@@ -35,37 +35,59 @@ const decodeOption = (value: string): { id: number; season: string } => {
 }
 
 export default function PlayerCardPage() {
-  const [options, setOptions] = useState<PlayerCardOption[]>([])
   const [selectedValue, setSelectedValue] = useState<string>('')
-  const [cardData, setCardData] = useState<CortexPlayer | null>(null)
-  const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabName>('Overview')
   const [animKey, setAnimKey] = useState(0)
 
-  // Load all available player+season options on mount
-  useEffect(() => {
-    api.players.available().then((data) => {
-      setOptions(data)
-      if (data.length > 0) {
-        const first = encodeOption(data[0].id, data[0].season)
-        setSelectedValue(first)
-      }
-    })
-  }, [])
+  // Load all available player+season options on mount.
+  const {
+    data: options = [],
+    isLoading: optionsLoading,
+    isError: optionsError,
+    error: optionsErrorObj,
+  } = useQuery({
+    queryKey: ['players', 'available'],
+    queryFn: () => api.players.available(),
+  })
 
-  // Fetch card data whenever the selection changes
+  // Default-select the first available option once it arrives.
   useEffect(() => {
-    if (!selectedValue) return
-    const { id, season } = decodeOption(selectedValue)
-    setLoading(true)
-    api.players
-      .card(id, season)
-      .then((data) => {
-        setCardData(mapApiToPlayer(data))
-        setActiveTab('Overview')
-      })
-      .finally(() => setLoading(false))
-  }, [selectedValue])
+    if (!selectedValue && options.length > 0) {
+      setSelectedValue(encodeOption(options[0].id, options[0].season))
+    }
+  }, [options, selectedValue])
+
+  // Decode selection for the card query. React Query keys the request on
+  // (id, season) so stale responses for prior selections are discarded
+  // automatically — eliminates the race condition the old effect had.
+  const decoded = selectedValue ? decodeOption(selectedValue) : null
+  const playerId = decoded?.id
+  const season = decoded?.season
+
+  const {
+    data: cardApiData,
+    isLoading: cardLoading,
+    isError: cardError,
+    error: cardErrorObj,
+    refetch: refetchCard,
+  } = useQuery({
+    queryKey: ['player-card', playerId, season],
+    queryFn: () => api.players.card(playerId as number, season),
+    enabled: !!playerId && !!season,
+  })
+
+  // Derive CortexPlayer inline rather than holding shadow state.
+  const cardData: CortexPlayer | null = useMemo(
+    () => (cardApiData ? mapApiToPlayer(cardApiData) : null),
+    [cardApiData]
+  )
+
+  // Reset active tab whenever a new player card loads.
+  useEffect(() => {
+    if (cardApiData) {
+      setActiveTab('Overview')
+    }
+  }, [cardApiData])
 
   useEffect(() => {
     setAnimKey((k) => k + 1)
@@ -104,7 +126,9 @@ export default function PlayerCardPage() {
           disabled={options.length === 0}
         >
           {options.length === 0 && (
-            <option value="">Loading players…</option>
+            <option value="">
+              {optionsLoading ? 'Loading players…' : optionsError ? 'Unable to load players' : 'No players available'}
+            </option>
           )}
           {options.map((opt) => (
             <option
@@ -118,11 +142,29 @@ export default function PlayerCardPage() {
         {options.length > 0 && (
           <p className="mt-1 text-xs text-gray-400 font-mono">{options.length} player seasons available</p>
         )}
+        {optionsError && (
+          <p className="mt-1 text-xs text-red-500 font-mono">
+            Failed to load player list: {optionsErrorObj instanceof Error ? optionsErrorObj.message : 'Unknown error'}
+          </p>
+        )}
       </div>
 
-      {loading ? (
+      {cardLoading ? (
         <div className="flex items-center justify-center h-64">
           <p className="text-gray-400 font-mono text-sm animate-pulse">Loading player data…</p>
+        </div>
+      ) : cardError ? (
+        <div className="flex flex-col items-center justify-center h-64 gap-3">
+          <p className="text-red-500 font-mono text-sm">
+            Failed to load player card: {cardErrorObj instanceof Error ? cardErrorObj.message : 'Unknown error'}
+          </p>
+          <button
+            type="button"
+            onClick={() => refetchCard()}
+            className="px-4 py-2 text-xs uppercase tracking-[1.5px] bg-primary-600 text-white rounded hover:bg-primary-700 transition-colors"
+          >
+            Retry
+          </button>
         </div>
       ) : cardData ? (
         <>
