@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class OnOffStats(BaseModel):
@@ -56,8 +56,7 @@ class PlayerImpact(BaseModel):
     context: ImpactContext | None
     impact: ImpactRating | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ImpactLeaderboardEntry(BaseModel):
@@ -76,5 +75,4 @@ class ImpactLeaderboardEntry(BaseModel):
     reliability_factor: Decimal | None
     impact_percentile: int | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

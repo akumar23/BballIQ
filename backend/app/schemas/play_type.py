@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class PlayTypeMetrics(BaseModel):
@@ -44,8 +44,7 @@ class PlayerPlayTypeStats(BaseModel):
     cut: PlayTypeMetrics | None = None
     off_screen: PlayTypeMetrics | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PlayTypeLeaderboardEntry(BaseModel):
@@ -64,8 +63,7 @@ class PlayTypeLeaderboardEntry(BaseModel):
     frequency: Decimal | None
     ppp_percentile: int | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PlayTypeLeaderboardResponse(BaseModel):

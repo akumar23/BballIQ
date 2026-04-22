@@ -20,7 +20,8 @@ dependencies = [
     "numpy>=1.26.0",
     "beautifulsoup4>=4.12.0",
     "lxml>=5.0.0",
-    "fastapi-cache2[redis]>=0.2.1,<0.3",
+    # 0.2.2 is the first release whose [redis] extra works with redis>=5; 0.2.1 pins redis<5.
+    "fastapi-cache2[redis]>=0.2.2,<0.3",
     # Observability: Sentry for error reporting (optional at runtime — skipped
     # when SENTRY_DSN is unset), Prometheus metrics endpoint, structlog for
     # JSON-formatted logs with per-request / per-task context.
@@ -124,6 +125,17 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
+asyncio_mode = "auto"
+filterwarnings = [
+    # Treat deprecations in our own code as errors so regressions fail CI instead of
+    # piling up in the 17k-warning tail.
+    "error::DeprecationWarning:app.*",
+    "error::pydantic.warnings.PydanticDeprecatedSince20:app.*",
+    # Silence known third-party noise we can't fix here.
+    "ignore::DeprecationWarning:pytest_asyncio.*",
+    "ignore::DeprecationWarning:celery.*",
+    "ignore::DeprecationWarning:starlette.*",
+]
 markers = [
     "unit: Unit tests (fast, isolated)",
     "integration: Integration tests (may require external services)",

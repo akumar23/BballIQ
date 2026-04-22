@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class AdvancedStats(BaseModel):
@@ -45,8 +45,7 @@ class PlayerShotZones(BaseModel):
     season: str
     zones: list[ShotZone]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ClutchStats(BaseModel):
@@ -113,8 +112,7 @@ class PlayerDefensiveProfile(BaseModel):
     # Isolation defense
     iso_defense: IsoDefenseStats | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PlayerAdvancedStatsResponse(BaseModel):
@@ -129,5 +127,4 @@ class PlayerAdvancedStatsResponse(BaseModel):
     advanced: AdvancedStats | None
     clutch: ClutchStats | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
