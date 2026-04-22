@@ -3,18 +3,17 @@
 These tasks wrap the existing fetch scripts to run as scheduled background jobs.
 """
 
-import logging
-
 import requests
 import sqlalchemy.exc
-from celery import chain, group
+import structlog
+from celery import chain, chord, group
 
 from app.core.celery_app import celery_app
 from app.core.season import get_current_season
 from app.db.session import SessionLocal
 from app.services.rate_limiter import CircuitBreakerError, RateLimitError
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 __all__ = [
     "get_current_season",
@@ -1229,41 +1228,155 @@ def refresh_phase2_data(self, season: str | None = None) -> dict[str, object]:
         db.close()
 
 
-@celery_app.task(bind=True)
-def daily_data_refresh(self, season: str | None = None) -> dict:
-    """Orchestrate the full daily data refresh.
+# --- Daily pipeline orchestration ---------------------------------------
+#
+# Prior implementation used ``chain(tracking, group(...), phase2, recalc)``
+# with a fire-and-forget ``.apply_async()`` that returned immediately. Two
+# problems with that shape:
+#
+# 1. ``chain(... group(...) ...)`` does not treat the group as a true
+#    blocking join; the downstream ``phase2`` step could run before the
+#    group had finished propagating its state through the backend.
+# 2. The wrapping ``daily_data_refresh`` task always returned
+#    ``{"status": "started"}`` regardless of what happened downstream, so a
+#    failing child refresh silently registered as a successful beat run.
+#
+# The replacement uses a ``chord`` to explicitly gate the post-group phase
+# on the group completing, and blocks on the pipeline's final
+# ``AsyncResult.get()`` so any ``RuntimeError`` raised by a child (e.g.
+# ``_finalize_task_status`` over the error threshold) surfaces as a
+# ``daily_data_refresh`` failure that Celery / Sentry can report on.
 
-    Runs tracking data first, then impact, play type, and advanced data in parallel,
-    followed by metric recalculation.
+# Upper bound (in seconds) for ``AsyncResult.get()`` inside the orchestrator.
+# Intentionally conservative: long enough for a real refresh to finish, but
+# bounded so a permanently-stuck child eventually releases the worker slot
+# instead of hanging forever.
+_DAILY_PIPELINE_GET_TIMEOUT = 7200  # 2 hours
+
+
+@celery_app.task(
+    bind=True,
+    name="app.tasks.data_refresh._after_group_phase",
+    acks_late=True,
+)
+def _after_group_phase(
+    self,  # noqa: ARG001 - Celery injects self via bind=True
+    group_results: list[dict[str, object]],
+    season: str,
+) -> dict[str, object]:
+    """Chord body: inspect the Phase 1 group's results and pass them through.
+
+    Celery delivers the group's per-child return values as the first
+    positional argument. Each child either returned a status dict from
+    :func:`_finalize_task_status` or raised — a raise would have already
+    failed the chord, so by the time we run every entry is a dict.
+
+    Returns:
+        The combined payload (``status`` roll-up + per-child dicts) so the
+        chain's next step can see what happened even though it uses
+        ``.si()`` and ignores the value.
+    """
+    statuses = [r.get("status") if isinstance(r, dict) else None for r in group_results]
+    overall = "success"
+    if any(s == "degraded" for s in statuses):
+        overall = "degraded"
+    logger.info(
+        "daily_refresh_group_complete",
+        season=season,
+        child_statuses=statuses,
+        overall=overall,
+    )
+    return {
+        "status": overall,
+        "season": season,
+        "children": group_results,
+    }
+
+
+@celery_app.task(
+    bind=True,
+    name="daily_data_refresh",
+    soft_time_limit=7200,  # 2h soft — gives child tasks headroom to finish
+    time_limit=7500,       # 2h 5m hard — SIGKILL guard
+    ignore_result=False,
+    acks_late=True,
+)
+def daily_data_refresh(self, season: str | None = None) -> dict[str, object]:
+    """Orchestrate the full daily data refresh, synchronously awaiting completion.
+
+    Pipeline shape:
+
+    .. code-block:: text
+
+        tracking -> chord(
+                       group(impact, play_type, advanced),
+                       body=_after_group_phase,
+                    ) -> phase2 -> recalculate_metrics
+
+    The task blocks on the pipeline's final ``AsyncResult`` so:
+
+    - a ``RuntimeError`` from any child (threshold exceeded) propagates up
+      and marks ``daily_data_refresh`` as failed,
+    - Celery beat's view of the schedule reflects the real pipeline state,
+    - Sentry's ``CeleryIntegration`` captures the failure with full context.
 
     Args:
         season: NBA season string. Defaults to current season.
 
     Returns:
-        dict with overall status
+        dict with final status, workflow id, and the terminal task's payload.
     """
     from app.tasks.metrics import recalculate_metrics
 
     season = season or get_current_season()
-    logger.info("Starting daily data refresh for season %s", season)
+    log = logger.bind(season=season)
+    log.info("daily_data_refresh_started")
 
-    # Chain: tracking first, then Phase 1 group, then Phase 2 (depends on Phase 1), then recalculate
-    workflow = chain(
-        refresh_tracking_data.s(season),
-        group(
-            refresh_impact_data.s(season),
-            refresh_play_type_data.s(season),
-            refresh_advanced_data.s(season),
+    # ``si`` (immutable signature) is used for every step whose payload the
+    # next step should ignore — keeps the behaviour identical to the old
+    # chain while letting the chord explicitly carry the group's results
+    # into ``_after_group_phase``.
+    pipeline = chain(
+        refresh_tracking_data.si(season),
+        chord(
+            group(
+                refresh_impact_data.si(season),
+                refresh_play_type_data.si(season),
+                refresh_advanced_data.si(season),
+            ),
+            _after_group_phase.s(season),
         ),
-        refresh_phase2_data.si(season),  # si() ignores previous result; depends on Phase 1 data
+        refresh_phase2_data.si(season),
         recalculate_metrics.si(season),
     )
 
-    result = workflow.apply_async()
-    logger.info("Daily data refresh workflow started: %s", result.id)
+    result = pipeline.apply_async()
+    workflow_id = result.id
+    log = log.bind(workflow_id=workflow_id)
+    log.info("daily_data_refresh_pipeline_submitted")
 
+    try:
+        # ``disable_sync_subtasks=False`` is required because this task is
+        # itself a Celery task — without it, ``.get()`` raises
+        # ``RuntimeError: Never call result.get() within a task!``.
+        # ``propagate=True`` re-raises any child's exception here so the
+        # surrounding try/except can log it before Celery marks us failed.
+        final = result.get(
+            timeout=_DAILY_PIPELINE_GET_TIMEOUT,
+            disable_sync_subtasks=False,
+            propagate=True,
+        )
+    except Exception:
+        # Sentry's CeleryIntegration captures the exception automatically
+        # once we re-raise. ``exc_info=True`` preserves the traceback in
+        # the JSON log line for pre-Sentry / local-dev visibility.
+        log.error("daily_data_refresh_failed", exc_info=True)
+        raise
+
+    log.info("daily_data_refresh_completed", final=final)
     return {
-        "status": "started",
-        "workflow_id": result.id,
+        "status": "success",
+        "workflow_id": workflow_id,
         "season": season,
+        "final": final,
     }

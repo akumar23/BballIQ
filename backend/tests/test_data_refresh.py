@@ -318,3 +318,93 @@ class TestFinalizeTaskStatus:
             extra={"shot_zones_processed": 42},
         )
         assert result["shot_zones_processed"] == 42
+
+
+@pytest.mark.unit
+class TestDailyDataRefreshOrchestrator:
+    """Verify the Celery chord orchestrator surfaces child failures.
+
+    These tests stub out the whole pipeline: we monkeypatch ``chain`` so
+    ``pipeline.apply_async()`` returns a fake ``AsyncResult`` whose ``.get()``
+    either returns a happy payload or re-raises whatever the chord's child
+    raised. That gives us end-to-end coverage of
+    ``daily_data_refresh``'s error-propagation contract without needing a
+    real broker.
+    """
+
+    def _patch_pipeline(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        result: Any,
+    ) -> MagicMock:
+        """Replace ``chain(...).apply_async()`` with a stub returning ``result``."""
+        fake_signature = MagicMock()
+        fake_signature.apply_async.return_value = result
+        fake_chain = MagicMock(return_value=fake_signature)
+        monkeypatch.setattr(data_refresh, "chain", fake_chain)
+        return fake_signature
+
+    def test_raises_when_child_task_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A ``RuntimeError`` from a child (threshold exceeded) propagates."""
+
+        class _FailingResult:
+            id = "workflow-abc"
+
+            def get(self, *_a: Any, **_kw: Any) -> dict[str, object]:
+                # Mirrors the real contract: ``_finalize_task_status`` raises
+                # ``RuntimeError`` when error_rate exceeds the threshold, and
+                # Celery propagates it through ``.get(propagate=True)``.
+                raise RuntimeError("2/5 players failed in refresh_impact_data")
+
+        self._patch_pipeline(monkeypatch, _FailingResult())
+
+        with pytest.raises(RuntimeError, match=r"players failed"):
+            # ``.apply`` runs the task synchronously; ``task_eager_propagates``
+            # is True via the autouse fixture so the inner raise surfaces here.
+            data_refresh.daily_data_refresh.apply(args=["2024-25"]).get()
+
+    def test_returns_success_payload_when_pipeline_completes(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Happy path: ``.get()`` returns a dict, task returns success wrapper."""
+
+        class _OkResult:
+            id = "workflow-xyz"
+
+            def get(self, *_a: Any, **_kw: Any) -> dict[str, object]:
+                return {"status": "success", "season": "2024-25"}
+
+        self._patch_pipeline(monkeypatch, _OkResult())
+
+        payload = data_refresh.daily_data_refresh.apply(args=["2024-25"]).get()
+
+        assert payload["status"] == "success"
+        assert payload["workflow_id"] == "workflow-xyz"
+        assert payload["season"] == "2024-25"
+        assert payload["final"] == {"status": "success", "season": "2024-25"}
+
+    def test_after_group_phase_marks_degraded_when_any_child_degraded(self) -> None:
+        """The chord body rolls up child statuses into an overall tag."""
+        group_results = [
+            {"status": "success", "season": "2024-25"},
+            {"status": "degraded", "season": "2024-25", "errors": 1},
+            {"status": "success", "season": "2024-25"},
+        ]
+        out = data_refresh._after_group_phase.apply(
+            args=[group_results, "2024-25"]
+        ).get()
+        assert out["status"] == "degraded"
+        assert out["season"] == "2024-25"
+        assert out["children"] == group_results
+
+    def test_after_group_phase_success_when_all_children_succeed(self) -> None:
+        group_results = [
+            {"status": "success", "season": "2024-25"},
+            {"status": "success", "season": "2024-25"},
+        ]
+        out = data_refresh._after_group_phase.apply(
+            args=[group_results, "2024-25"]
+        ).get()
+        assert out["status"] == "success"
