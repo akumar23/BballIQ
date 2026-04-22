@@ -20,8 +20,11 @@ dependencies = [
     "numpy>=1.26.0",
     "beautifulsoup4>=4.12.0",
     "lxml>=5.0.0",
-    # 0.2.2 is the first release whose [redis] extra works with redis>=5; 0.2.1 pins redis<5.
-    "fastapi-cache2[redis]>=0.2.2,<0.3",
+    # The [redis] extra (as of 0.2.2, the latest release) pins redis<5, which
+    # conflicts with our redis>=5 dep. RedisBackend only needs the top-level
+    # `redis` package at runtime, so we install fastapi-cache2 without the extra
+    # and let our own `redis` pin satisfy the backend.
+    "fastapi-cache2>=0.2.2,<0.3",
     # Observability: Sentry for error reporting (optional at runtime — skipped
     # when SENTRY_DSN is unset), Prometheus metrics endpoint, structlog for
     # JSON-formatted logs with per-request / per-task context.
