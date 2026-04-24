@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Full startup script — seeds ALL data for EVERY available season.
 
-Runs migrations, then seeds 2024-25 first (creates player records that
-historical seasons reference), then backfills every season from 2023-24
+Runs migrations, then seeds 2025-26 first (creates player records that
+historical seasons reference), then backfills every season from 2024-25
 down to 2013-14 with all applicable phases.
 
 Usage:
@@ -26,7 +26,7 @@ from scripts.shared import generate_seasons
 
 ROOT = Path(__file__).parent.parent  # backend/
 
-CURRENT_SEASON = "2024-25"
+CURRENT_SEASON = "2025-26"
 
 # All phases with their earliest available season
 PHASES = [
@@ -88,7 +88,7 @@ PHASES = [
         "key": "all_in_one",
         "label": "Phase 7: All-In-One Metrics (EPM, DARKO, LEBRON, RPM)",
         "module": "scripts.fetch_all_in_one_data",
-        "earliest": "2024-25",  # External scraped data — mostly paywalled for historical
+        "earliest": "2025-26",  # External scraped data — mostly paywalled for historical
     },
     {
         "key": "game_logs",
@@ -100,7 +100,7 @@ PHASES = [
         "key": "nbarapm",
         "label": "Phase 8: nbarapm.com (RAPM, Big Board, RAPTOR, MAMBA)",
         "module": "scripts.fetch_nbarapm_data",
-        "earliest": "2024-25",  # nbarapm.com — season-independent, run once
+        "earliest": "2025-26",  # nbarapm.com — season-independent, run once
     },
 ]
 
@@ -146,8 +146,8 @@ def main():
         help="Earliest historical season (default: 2013-14)",
     )
     parser.add_argument(
-        "--to-season", default="2023-24",
-        help="Latest historical season (default: 2023-24)",
+        "--to-season", default="2024-25",
+        help="Latest historical season (default: 2024-25)",
     )
     parser.add_argument(
         "--current-season", default=CURRENT_SEASON,
@@ -156,6 +156,10 @@ def main():
     parser.add_argument(
         "--skip-current", action="store_true",
         help="Skip the current season (only run historical)",
+    )
+    parser.add_argument(
+        "--skip-historical", action="store_true",
+        help="Skip all historical seasons (only run current)",
     )
     parser.add_argument(
         "--skip-migrations", action="store_true",
@@ -172,7 +176,10 @@ def main():
     if args.only:
         active_phases = [p for p in PHASES if p["key"] in args.only]
 
-    historical_seasons = generate_seasons(args.from_season, args.to_season)
+    if args.skip_current and args.skip_historical:
+        parser.error("--skip-current and --skip-historical cannot both be set")
+
+    historical_seasons = [] if args.skip_historical else generate_seasons(args.from_season, args.to_season)
     current = args.current_season
 
     # Build the full season list: current first, then historical newest-to-oldest

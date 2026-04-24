@@ -10,7 +10,7 @@ interface SeasonContextValue {
 }
 
 const SeasonContext = createContext<SeasonContextValue>({
-  season: '2024-25',
+  season: '2025-26',
   setSeason: () => {},
   availableSeasons: [],
   seasonsLoaded: false,
@@ -25,7 +25,7 @@ export function SeasonProvider({ children }: { children: ReactNode }) {
   })
 
   const availableSeasons = data ?? []
-  const [season, setSeason] = useState('2024-25')
+  const [season, setSeason] = useState('2025-26')
   const [hasDefaulted, setHasDefaulted] = useState(false)
   const seasonsLoaded = isSuccess || isError
 

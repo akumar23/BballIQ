@@ -294,7 +294,7 @@ def fetch_and_store_game_logs(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Fetch game logs and compute consistency")
-    parser.add_argument("--season", default="2024-25")
+    parser.add_argument("--season", default="2025-26")
     parser.add_argument("--verbose", "-v", action="store_true")
     parser.add_argument("--no-cache", action="store_true")
     args = parser.parse_args()

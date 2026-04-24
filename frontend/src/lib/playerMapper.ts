@@ -134,7 +134,7 @@ export function mapApiToPlayer(data: PlayerCardData): CortexPlayer {
         stlRate: n(defOv?.stl_rate),
         blkRate: n(defOv?.blk_rate),
         deflections: n(defOv?.deflections_per_game),
-        rank: 0,
+        rank: defOv?.rank ?? 0,
       },
       perimeter: {
         onBallDfg: n(def?.overall?.d_fg_pct),
@@ -154,8 +154,8 @@ export function mapApiToPlayer(data: PlayerCardData): CortexPlayer {
         isoPpp: n(def?.iso_defense?.ppp),
         isoRank: def?.iso_defense?.percentile ?? 0,
         possessions: def?.iso_defense?.poss ?? 0,
-        tovForcedPct: 0,
-        freqTargeted: 0,
+        tovForcedPct: n(data.defensive_play_types?.isolation?.tov_pct) * 100,
+        freqTargeted: n(data.defensive_play_types?.isolation?.freq) * 100,
         byZone: [],
         scoutingReport: '',
       },
@@ -177,7 +177,7 @@ export function mapApiToPlayer(data: PlayerCardData): CortexPlayer {
       per: n(s.per),
       ws48: n(s.ws48),
       bpm: n(s.bpm),
-      epm: 0,
+      epm: n(s.epm),
     })),
 
     radarData: rad
@@ -216,11 +216,30 @@ export function mapApiToPlayer(data: PlayerCardData): CortexPlayer {
         note: '',
       })),
       teammateDependency: {
-        eliteSpacingTS: 0,
-        poorSpacingTS: 0,
-        spacingDelta: 0,
-        withRimProtectorFg: 0,
-        withoutRimProtectorFg: 0,
+        eliteSpacingNetRtg:
+          port?.teammate_dependency?.elite_spacing_net_rtg != null
+            ? n(port.teammate_dependency.elite_spacing_net_rtg)
+            : null,
+        eliteSpacingMinutes: n(port?.teammate_dependency?.elite_spacing_minutes),
+        poorSpacingNetRtg:
+          port?.teammate_dependency?.poor_spacing_net_rtg != null
+            ? n(port.teammate_dependency.poor_spacing_net_rtg)
+            : null,
+        poorSpacingMinutes: n(port?.teammate_dependency?.poor_spacing_minutes),
+        spacingDelta:
+          port?.teammate_dependency?.spacing_delta != null
+            ? n(port.teammate_dependency.spacing_delta)
+            : null,
+        withRimProtectorNetRtg:
+          port?.teammate_dependency?.with_rim_protector_net_rtg != null
+            ? n(port.teammate_dependency.with_rim_protector_net_rtg)
+            : null,
+        withRimProtectorMinutes: n(port?.teammate_dependency?.with_rim_protector_minutes),
+        withoutRimProtectorNetRtg:
+          port?.teammate_dependency?.without_rim_protector_net_rtg != null
+            ? n(port.teammate_dependency.without_rim_protector_net_rtg)
+            : null,
+        withoutRimProtectorMinutes: n(port?.teammate_dependency?.without_rim_protector_minutes),
         dependencyScore: n(port?.low_dependency),
       },
       defensiveSwitchability: {
@@ -231,7 +250,7 @@ export function mapApiToPlayer(data: PlayerCardData): CortexPlayer {
           : [],
         switchScore: n(port?.switchability),
         perimeterDfgDiff: n(def?.overall?.pct_plusminus),
-        pnrNavigation: 0,
+        pnrNavigation: n(data.defensive_play_types?.pnr_ball_handler?.percentile),
         scoutingNote: '',
       },
       projectedFits: [],
@@ -254,13 +273,13 @@ export function mapApiToPlayer(data: PlayerCardData): CortexPlayer {
       playoffProjection: {
         ppg: n(champ?.playoff_projection?.projected_ppg),
         ts: n(champ?.playoff_projection?.projected_ts),
-        ast: 0,
-        drtg: 0,
+        ast: n(champ?.playoff_projection?.projected_ast),
+        drtg: n(champ?.playoff_projection?.projected_drtg),
         regToPlayoffDrop: {
           ppg: n(champ?.playoff_projection?.reg_ppg) - n(champ?.playoff_projection?.projected_ppg),
           ts: n(champ?.playoff_projection?.reg_ts) - n(champ?.playoff_projection?.projected_ts),
-          ast: 0,
-          drtg: 0,
+          ast: n(champ?.playoff_projection?.reg_ast) - n(champ?.playoff_projection?.projected_ast),
+          drtg: n(champ?.playoff_projection?.reg_drtg) - n(champ?.playoff_projection?.projected_drtg),
         },
         comparisonNote: '',
       },
@@ -405,6 +424,155 @@ export function mapApiToPlayer(data: PlayerCardData): CortexPlayer {
             normalFgPct: n(b.normal_fg_pct),
             pctPlusminus: n(b.pct_plusminus),
           })),
+        }
+      : null,
+
+    frictionEfficiency: data.friction_efficiency
+      ? {
+          veryTightEfg: n(data.friction_efficiency.very_tight_efg),
+          tightEfg: n(data.friction_efficiency.tight_efg),
+          openEfg: n(data.friction_efficiency.open_efg),
+          wideOpenEfg: n(data.friction_efficiency.wide_open_efg),
+          frictionSlope: n(data.friction_efficiency.friction_slope),
+          pressureAdjustedEfg: n(data.friction_efficiency.pressure_adjusted_efg),
+        }
+      : null,
+
+    gravityIndex: data.gravity_index
+      ? {
+          tightAttentionRate: n(data.gravity_index.tight_attention_rate),
+          teamOffLift: n(data.gravity_index.team_off_lift),
+          gravityIndex: n(data.gravity_index.gravity_index),
+        }
+      : null,
+
+    shotDiet: data.shot_diet
+      ? {
+          entropy: n(data.shot_diet.entropy),
+          entropyNormalized: n(data.shot_diet.entropy_normalized),
+          primaryModes: data.shot_diet.primary_modes ?? 0,
+          topPlayType: data.shot_diet.top_play_type ?? '',
+          topPlayTypeFreq: n(data.shot_diet.top_play_type_freq),
+        }
+      : null,
+
+    rimGravity: data.rim_gravity
+      ? {
+          paintTouchesPerGame: n(data.rim_gravity.paint_touches_per_game),
+          drivesPerGame: n(data.rim_gravity.drives_per_game),
+          rimFgPct: n(data.rim_gravity.rim_fg_pct),
+          rimFgPctVsLeague: n(data.rim_gravity.rim_fg_pct_vs_league),
+          paintPtsPerTouch: n(data.rim_gravity.paint_pts_per_touch),
+          rimGravityScore: n(data.rim_gravity.rim_gravity_score),
+        }
+      : null,
+
+    passFunnel: data.pass_funnel
+      ? {
+          passesMade: n(data.pass_funnel.passes_made),
+          potentialAst: n(data.pass_funnel.potential_ast),
+          ast: n(data.pass_funnel.ast),
+          secondaryAst: n(data.pass_funnel.secondary_ast),
+          passToPotentialPct: n(data.pass_funnel.pass_to_potential_pct),
+          potentialToActualPct: n(data.pass_funnel.potential_to_actual_pct),
+          passToActualPct: n(data.pass_funnel.pass_to_actual_pct),
+          cascadeRate: n(data.pass_funnel.cascade_rate),
+        }
+      : null,
+
+    leverageTs: data.leverage_ts
+      ? {
+          overallTs: n(data.leverage_ts.overall_ts_pct),
+          leverageTs: n(data.leverage_ts.leverage_ts_pct),
+          blowoutTs: n(data.leverage_ts.blowout_ts_pct),
+          tsLeverageDelta: n(data.leverage_ts.ts_leverage_delta),
+          leverageGames: data.leverage_ts.leverage_games ?? 0,
+          blowoutGames: data.leverage_ts.blowout_games ?? 0,
+        }
+      : null,
+
+    possessionDwell: data.possession_dwell
+      ? {
+          avgSecPerTouch: n(data.possession_dwell.avg_sec_per_touch),
+          ptsPerTouch: n(data.possession_dwell.pts_per_touch),
+          ptsPerSecond: n(data.possession_dwell.pts_per_second),
+          creationPerSecond: n(data.possession_dwell.creation_per_second),
+          dwellEfficiencyScore: n(data.possession_dwell.dwell_efficiency_score),
+        }
+      : null,
+
+    mileProduction: data.mile_production
+      ? {
+          distMilesPerGame: n(data.mile_production.dist_miles_per_game),
+          distMilesOffShare: n(data.mile_production.dist_miles_off_share),
+          ptsAstPerGame: n(data.mile_production.pts_ast_per_game),
+          productionPerMile: n(data.mile_production.production_per_mile),
+          productionPerOffMile: n(data.mile_production.production_per_off_mile),
+        }
+      : null,
+
+    lateSeasonTrend: data.late_season_trend
+      ? {
+          earlyGames: data.late_season_trend.early_games ?? 0,
+          lateGames: data.late_season_trend.late_games ?? 0,
+          earlyGameScore: n(data.late_season_trend.early_game_score),
+          lateGameScore: n(data.late_season_trend.late_game_score),
+          trendDelta: n(data.late_season_trend.trend_delta),
+          earlyMinutesAvg: n(data.late_season_trend.early_minutes_avg),
+          lateMinutesAvg: n(data.late_season_trend.late_minutes_avg),
+        }
+      : null,
+
+    defensiveTerrain: data.defensive_terrain
+      ? {
+          rimFreq: n(data.defensive_terrain.rim_freq),
+          rimPlusMinus: n(data.defensive_terrain.rim_plus_minus),
+          rimContribution: n(data.defensive_terrain.rim_contribution),
+          midFreq: n(data.defensive_terrain.mid_freq),
+          midPlusMinus: n(data.defensive_terrain.mid_plus_minus),
+          midContribution: n(data.defensive_terrain.mid_contribution),
+          threeFreq: n(data.defensive_terrain.three_freq),
+          threePlusMinus: n(data.defensive_terrain.three_plus_minus),
+          threeContribution: n(data.defensive_terrain.three_contribution),
+          terrainScore: n(data.defensive_terrain.terrain_score),
+        }
+      : null,
+
+    contestConversion: data.contest_conversion
+      ? {
+          contestsPerGame: n(data.contest_conversion.contests_per_game),
+          defendedFgaPerGame: n(data.contest_conversion.defended_fga_per_game),
+          missesForcedPerGame: n(data.contest_conversion.misses_forced_per_game),
+          missRate: n(data.contest_conversion.miss_rate),
+          contestToMissScore: n(data.contest_conversion.contest_to_miss_score),
+        }
+      : null,
+
+    lineupBuoyancy: data.lineup_buoyancy
+      ? {
+          totalLineups: data.lineup_buoyancy.total_lineups ?? 0,
+          qualifyingMinutes: n(data.lineup_buoyancy.qualifying_minutes),
+          worstTercileNetRtg: n(data.lineup_buoyancy.worst_tercile_net_rtg),
+          worstTercileMinutes: n(data.lineup_buoyancy.worst_tercile_minutes),
+          bestTercileNetRtg: n(data.lineup_buoyancy.best_tercile_net_rtg),
+          bestTercileMinutes: n(data.lineup_buoyancy.best_tercile_minutes),
+          medianLineupNetRtg: n(data.lineup_buoyancy.median_lineup_net_rtg),
+          lineupSpread: n(data.lineup_buoyancy.lineup_spread),
+          floorScore: n(data.lineup_buoyancy.floor_score),
+          ceilingScore: n(data.lineup_buoyancy.ceiling_score),
+          buoyancyType: data.lineup_buoyancy.buoyancy_type ?? 'N/A',
+        }
+      : null,
+
+    schemeRobustness: data.scheme_robustness
+      ? {
+          topPlayTypes: data.scheme_robustness.top_play_types ?? [],
+          topPlayTypePpps: (data.scheme_robustness.top_play_type_ppps ?? []).map((p) => n(p)),
+          pppMean: n(data.scheme_robustness.ppp_mean),
+          pppStd: n(data.scheme_robustness.ppp_std),
+          coefficientOfVariation: n(data.scheme_robustness.coefficient_of_variation),
+          collapseRiskScore: n(data.scheme_robustness.collapse_risk_score),
+          robustnessScore: n(data.scheme_robustness.robustness_score),
         }
       : null,
 

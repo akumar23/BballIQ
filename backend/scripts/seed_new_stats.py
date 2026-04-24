@@ -79,7 +79,7 @@ def run_phase(module: str, season: str, label: str) -> bool:
 def main():
     parser = argparse.ArgumentParser(description="Seed all new stats for every season")
     parser.add_argument("--from-season", default="2013-14")
-    parser.add_argument("--to-season", default="2024-25")
+    parser.add_argument("--to-season", default="2025-26")
     parser.add_argument("--only", nargs="+", choices=ALL_KEYS)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

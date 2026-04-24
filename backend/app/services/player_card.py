@@ -8,6 +8,7 @@ to build the comprehensive PlayerCardData response.
 from __future__ import annotations
 
 import logging
+import math
 from decimal import Decimal
 
 from sqlalchemy import or_
@@ -15,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.models import (
     ContextualizedImpact,
+    DarkoHistory,
     LineupStats,
     Player,
     PlayerAdvancedStats,
@@ -48,6 +50,7 @@ from app.schemas.player_card import (
     CardChampionship,
     CardChampionshipPillar,
     CardConsistency,
+    CardContestConversion,
     CardContextualized,
     CardDefenderDistanceEntry,
     CardDefenseOverview,
@@ -55,27 +58,40 @@ from app.schemas.player_card import (
     CardDefensive,
     CardDefensivePlayType,
     CardDefensivePlayTypes,
+    CardDefensiveTerrain,
+    CardFrictionEfficiency,
     CardGameLog,
+    CardGravityIndex,
     CardImpact,
     CardIsoDefense,
+    CardLateSeasonTrend,
+    CardLeverageTs,
     CardLineup,
+    CardLineupBuoyancy,
     CardLineupContext,
     CardLuckAdjusted,
     CardMatchup,
+    CardMileProduction,
     CardOnOff,
     CardOpponentShooting,
     CardOpponentShootingBucket,
     CardOpponentTierEntry,
+    CardPassFunnel,
     CardPassing,
     CardPlayoffProjection,
     CardPlayType,
     CardPlayTypes,
     CardPortability,
+    CardPossessionDwell,
     CardRadar,
     CardReboundingTracking,
+    CardRimGravity,
+    CardSchemeRobustness,
     CardSchemeScore,
+    CardShotDiet,
     CardShotZone,
     CardSpeedDistance,
+    CardTeammateDependency,
     CardTouchesBreakdown,
     CardTouchKind,
     CardTraditional,
@@ -119,6 +135,7 @@ def _build_defense_overview(
     season_stat: SeasonStats | None,
     defense: PlayerDefensiveStats | None,
     gp: int,
+    rank: int | None = None,
 ) -> CardDefenseOverview | None:
     """Build defense overview from season stats and defensive stats."""
     if not season_stat and not defense:
@@ -160,6 +177,7 @@ def _build_defense_overview(
         blk_rate=blk_rate,
         deflections_per_game=defl_pg,
         rim_contests_per_game=rim_cpg,
+        rank=rank,
     )
 
 
@@ -239,8 +257,11 @@ class PlayerCardService:
         card_impact = self._build_impact(on_off, impact_ctx, player)
         card_play_types = self._build_play_types(play_types)
         card_shot_zones = self._build_shot_zones(shot_zones, gp)
-        card_defensive = self._build_defensive(defense, season_stat, gp)
-        card_career = self._build_career(career_rows)
+        defensive_rank = self._compute_defensive_rank()
+        card_defensive = self._build_defensive(
+            defense, season_stat, gp, defensive_rank
+        )
+        card_career = self._build_career(career_rows, player)
 
         # Additional data models
         all_in_one_row = self._first(PlayerAllInOneMetrics)
@@ -311,6 +332,24 @@ class PlayerCardService:
         card_def_play_types = self._build_defensive_play_types()
         card_recent_games, card_consistency = self._build_games_and_consistency()
 
+        # Derived "advanced signals" — composite stats built from the
+        # existing data sections above. These read no new DB tables; they
+        # synthesize sections already fetched (defender distance, play
+        # types, passing, touches, on/off).
+        card_friction = self._build_friction_efficiency()
+        card_gravity = self._build_gravity_index(on_off)
+        card_shot_diet = self._build_shot_diet(play_types)
+        card_rim_gravity = self._build_rim_gravity(shot_zones)
+        card_pass_funnel = self._build_pass_funnel(current_career, season_stat, gp)
+        card_leverage_ts = self._build_leverage_ts()
+        card_possession_dwell = self._build_possession_dwell(season_stat, gp)
+        card_mile_production = self._build_mile_production(current_career, gp)
+        card_late_trend = self._build_late_season_trend()
+        card_def_terrain = self._build_defensive_terrain(defense)
+        card_contest_conv = self._build_contest_conversion(season_stat, defense, gp)
+        card_lineup_buoyancy = self._build_lineup_buoyancy()
+        card_scheme_robustness = self._build_scheme_robustness(play_types)
+
         return PlayerCardData(
             id=player.id,
             nba_id=player.nba_id,
@@ -351,6 +390,19 @@ class PlayerCardService:
             defensive_play_types=card_def_play_types,
             recent_games=card_recent_games,
             consistency=card_consistency,
+            friction_efficiency=card_friction,
+            gravity_index=card_gravity,
+            shot_diet=card_shot_diet,
+            rim_gravity=card_rim_gravity,
+            pass_funnel=card_pass_funnel,
+            leverage_ts=card_leverage_ts,
+            possession_dwell=card_possession_dwell,
+            mile_production=card_mile_production,
+            late_season_trend=card_late_trend,
+            defensive_terrain=card_def_terrain,
+            contest_conversion=card_contest_conv,
+            lineup_buoyancy=card_lineup_buoyancy,
+            scheme_robustness=card_scheme_robustness,
         )
 
     # ------------------------------------------------------------------
@@ -570,6 +622,7 @@ class PlayerCardService:
         defense: PlayerDefensiveStats | None,
         season_stat: SeasonStats | None,
         gp: int,
+        defensive_rank: int | None = None,
     ) -> CardDefensive | None:
         if not defense:
             return None
@@ -599,11 +652,47 @@ class PlayerCardService:
                 if defense.iso_poss
                 else None
             ),
-            overview=_build_defense_overview(season_stat, defense, gp),
+            overview=_build_defense_overview(
+                season_stat, defense, gp, defensive_rank
+            ),
         )
 
+    def _compute_defensive_rank(self) -> int | None:
+        """Compute this player's league rank by rapm_defense for the season.
+
+        Qualifying set: players with non-null rapm_defense and >= 500 total
+        season minutes (via SeasonStats.total_minutes — same minutes source
+        used elsewhere in this service for season aggregates). Ranks are
+        1-indexed, descending by rapm_defense. Returns None if the player
+        isn't in the qualifying set.
+        """
+        qualifying_minutes = 500
+        rows = (
+            self._db.query(
+                PlayerAllInOneMetrics.player_id,
+                PlayerAllInOneMetrics.rapm_defense,
+            )
+            .join(
+                SeasonStats,
+                (SeasonStats.player_id == PlayerAllInOneMetrics.player_id)
+                & (SeasonStats.season == PlayerAllInOneMetrics.season),
+            )
+            .filter(
+                PlayerAllInOneMetrics.season == self._season,
+                PlayerAllInOneMetrics.rapm_defense.isnot(None),
+                SeasonStats.total_minutes.isnot(None),
+                SeasonStats.total_minutes >= qualifying_minutes,
+            )
+            .order_by(PlayerAllInOneMetrics.rapm_defense.desc())
+            .all()
+        )
+        for idx, row in enumerate(rows, start=1):
+            if row.player_id == self._player_id:
+                return idx
+        return None
+
     def _build_career(
-        self, career_rows: list[PlayerCareerStats]
+        self, career_rows: list[PlayerCareerStats], player: Player
     ) -> list[CardCareerSeason]:
         computed_by_season = {
             row.season: row
@@ -611,6 +700,27 @@ class PlayerCardService:
             .filter(PlayerComputedAdvanced.player_id == self._player_id)
             .all()
         }
+
+        # Load DARKO DPM history keyed by integer season year (e.g. "2022-23" -> 2023).
+        # DarkoHistory is keyed by nba_id (NBA's canonical player id), not our internal
+        # player_id, so we join via Player.nba_id.
+        darko_by_year: dict[int, Decimal] = {}
+        if player.nba_id is not None:
+            for row in (
+                self._db.query(DarkoHistory)
+                .filter(DarkoHistory.nba_id == player.nba_id)
+                .all()
+            ):
+                if row.season is not None and row.dpm is not None:
+                    darko_by_year[row.season] = row.dpm
+
+        def _season_to_year(season_str: str) -> int | None:
+            # "2022-23" -> 2023; safe-guard against unexpected formats.
+            try:
+                return int(season_str.split("-")[0]) + 1
+            except (ValueError, IndexError, AttributeError):
+                return None
+
         return [
             CardCareerSeason(
                 season=row.season,
@@ -637,6 +747,7 @@ class PlayerCardService:
                     if row.season in computed_by_season
                     else None
                 ),
+                epm=darko_by_year.get(_season_to_year(row.season) or -1),
             )
             for row in career_rows
         ]
@@ -756,6 +867,8 @@ class PlayerCardService:
         port_result = port_calc.calculate()
         portability_score = port_result.portability_index
 
+        teammate_dependency = self._build_teammate_dependency()
+
         card_portability = CardPortability(
             index=to_decimal(port_result.portability_index),
             grade=port_result.grade,
@@ -772,8 +885,178 @@ class PlayerCardService:
                 for k, v in port_result.positions_guarded.items()
             },
             scheme_scores=card_scheme_scores,
+            teammate_dependency=teammate_dependency,
         )
         return card_portability, portability_score
+
+    # ------------------------------------------------------------------
+    # Teammate dependency (on-court net rating by lineup context)
+    # ------------------------------------------------------------------
+
+    # Minimum total minutes in a bucket before we report its NRtg. Below
+    # this threshold the sample is too small to separate signal from noise
+    # (a 20-min sample can easily show +30 or -30 NRtg at random).
+    _TEAMMATE_DEP_MIN_MINUTES = Decimal("50")
+
+    # Season-level qualifying thresholds for classifying teammates.
+    _ELITE_SPACER_FG3_PCT = Decimal("0.38")
+    _ELITE_SPACER_FG3A = 100  # season 3PA floor
+    _RIM_PROTECTOR_PCT_PLUSMINUS = Decimal("-0.03")
+    _RIM_PROTECTOR_D_FGA = Decimal("200")  # rim FGAs defended floor
+
+    def _load_elite_spacer_ids(self) -> set[int]:
+        """Return the set of player ids that qualify as elite spacers this season.
+
+        Qualifying set: players whose season fg3_pct >= 0.38 AND fg3a >= 100.
+        Computed as a single bulk query against SeasonStats.
+        """
+        rows = (
+            self._db.query(
+                SeasonStats.player_id,
+                SeasonStats.total_fg3m,
+                SeasonStats.total_fg3a,
+            )
+            .filter(
+                SeasonStats.season == self._season,
+                SeasonStats.total_fg3a.isnot(None),
+                SeasonStats.total_fg3a >= self._ELITE_SPACER_FG3A,
+            )
+            .all()
+        )
+        ids: set[int] = set()
+        for row in rows:
+            fg3a = row.total_fg3a or 0
+            fg3m = row.total_fg3m or 0
+            if fg3a <= 0:
+                continue
+            if Decimal(fg3m) / Decimal(fg3a) >= self._ELITE_SPACER_FG3_PCT:
+                ids.add(row.player_id)
+        return ids
+
+    def _load_rim_protector_ids(self) -> set[int]:
+        """Return the set of player ids that qualify as rim protectors this season.
+
+        Qualifying set: players with rim_pct_plusminus <= -0.03 (at least 3pp
+        better than the league average at the rim; negative is good) AND
+        rim_d_fga >= 200 (enough rim shots defended to trust the signal).
+        """
+        rows = (
+            self._db.query(PlayerDefensiveStats.player_id)
+            .filter(
+                PlayerDefensiveStats.season == self._season,
+                PlayerDefensiveStats.rim_pct_plusminus.isnot(None),
+                PlayerDefensiveStats.rim_pct_plusminus
+                <= self._RIM_PROTECTOR_PCT_PLUSMINUS,
+                PlayerDefensiveStats.rim_d_fga.isnot(None),
+                PlayerDefensiveStats.rim_d_fga >= self._RIM_PROTECTOR_D_FGA,
+            )
+            .all()
+        )
+        return {row.player_id for row in rows}
+
+    def _build_teammate_dependency(self) -> CardTeammateDependency | None:
+        """Aggregate the player's on-court net rating by teammate context.
+
+        Pulls every lineup_stats row for (player, season), classifies each
+        row by counting qualifying teammates (elite spacers / rim protectors)
+        in the other four slots, and computes minutes-weighted average
+        net_rating per bucket.
+
+        Returns None if the player has no lineup data for the season.
+        """
+        lineups = (
+            self._db.query(LineupStats)
+            .filter(
+                LineupStats.season == self._season,
+                or_(
+                    LineupStats.player1_id == self._player_id,
+                    LineupStats.player2_id == self._player_id,
+                    LineupStats.player3_id == self._player_id,
+                    LineupStats.player4_id == self._player_id,
+                    LineupStats.player5_id == self._player_id,
+                ),
+            )
+            .all()
+        )
+        if not lineups:
+            return None
+
+        elite_spacer_ids = self._load_elite_spacer_ids()
+        rim_protector_ids = self._load_rim_protector_ids()
+
+        # Bucket accumulators: (sum(net * min), sum(min))
+        zero = Decimal("0")
+        buckets: dict[str, list[Decimal]] = {
+            "elite_spacing": [zero, zero],
+            "poor_spacing": [zero, zero],
+            "with_rim": [zero, zero],
+            "without_rim": [zero, zero],
+        }
+
+        for lu in lineups:
+            minutes = lu.minutes
+            net = lu.net_rating
+            if minutes is None or net is None or minutes <= 0:
+                continue
+
+            teammates = [
+                pid
+                for pid in (
+                    lu.player1_id,
+                    lu.player2_id,
+                    lu.player3_id,
+                    lu.player4_id,
+                    lu.player5_id,
+                )
+                if pid != self._player_id
+            ]
+            spacer_count = sum(1 for pid in teammates if pid in elite_spacer_ids)
+            rim_count = sum(1 for pid in teammates if pid in rim_protector_ids)
+
+            contribution = net * minutes
+            if spacer_count >= 2:
+                buckets["elite_spacing"][0] += contribution
+                buckets["elite_spacing"][1] += minutes
+            if spacer_count == 0:
+                buckets["poor_spacing"][0] += contribution
+                buckets["poor_spacing"][1] += minutes
+            if rim_count >= 1:
+                buckets["with_rim"][0] += contribution
+                buckets["with_rim"][1] += minutes
+            else:
+                buckets["without_rim"][0] += contribution
+                buckets["without_rim"][1] += minutes
+
+        def _avg(bucket_key: str) -> tuple[Decimal | None, Decimal | None]:
+            weighted, total_min = buckets[bucket_key]
+            if total_min < self._TEAMMATE_DEP_MIN_MINUTES:
+                # Not enough minutes to report an NRtg, but still surface the
+                # minutes so the UI can explain why it's "N/A".
+                minutes_out = total_min if total_min > 0 else None
+                return None, minutes_out
+            net = (weighted / total_min).quantize(Decimal("0.01"))
+            return net, total_min.quantize(Decimal("0.01"))
+
+        elite_net, elite_min = _avg("elite_spacing")
+        poor_net, poor_min = _avg("poor_spacing")
+        with_rim_net, with_rim_min = _avg("with_rim")
+        without_rim_net, without_rim_min = _avg("without_rim")
+
+        spacing_delta: Decimal | None = None
+        if elite_net is not None and poor_net is not None:
+            spacing_delta = (elite_net - poor_net).quantize(Decimal("0.01"))
+
+        return CardTeammateDependency(
+            elite_spacing_net_rtg=elite_net,
+            elite_spacing_minutes=elite_min,
+            poor_spacing_net_rtg=poor_net,
+            poor_spacing_minutes=poor_min,
+            spacing_delta=spacing_delta,
+            with_rim_protector_net_rtg=with_rim_net,
+            with_rim_protector_minutes=with_rim_min,
+            without_rim_protector_net_rtg=without_rim_net,
+            without_rim_protector_minutes=without_rim_min,
+        )
 
     def _compute_championship(
         self,
@@ -815,11 +1098,23 @@ class PlayerCardService:
             * (proj_ts / max(0.01, reg_ts))
         )
 
+        # AST is fairly stable reg->playoffs; project straight through.
+        reg_apg = safe_float(season_stat.total_assists) / max(1, gp)
+        proj_apg = reg_apg
+
+        # DRtg is historically stable reg->playoffs; pass-through (no model).
+        reg_drtg = advanced.def_rating if advanced else None
+        proj_drtg = reg_drtg
+
         playoff_proj = CardPlayoffProjection(
             projected_ppg=to_decimal(proj_ppg),
             projected_ts=to_decimal(proj_ts, "0.001"),
             reg_ppg=to_decimal(reg_ppg),
             reg_ts=to_decimal(reg_ts, "0.001"),
+            projected_ast=to_decimal(proj_apg),
+            reg_ast=to_decimal(reg_apg),
+            projected_drtg=proj_drtg,
+            reg_drtg=reg_drtg,
         )
 
         return CardChampionship(
@@ -1329,3 +1624,763 @@ class PlayerCardService:
             )
 
         return card_recent_games, card_consistency
+
+    # ------------------------------------------------------------------
+    # Derived "advanced signal" metrics
+    # ------------------------------------------------------------------
+
+    # League-average rim FG% used as the zero point for rim_fg_pct_vs_league.
+    # Restricted-area league avg hovers around .640 in recent seasons — using
+    # a fixed baseline keeps the metric interpretable without a league join.
+    _LEAGUE_AVG_RIM_FG_PCT = 0.640
+
+    def _build_friction_efficiency(self) -> CardFrictionEfficiency | None:
+        """Shooting eFG% by defender distance + a single friction slope.
+
+        Requires the full defender-distance row. Slope uses eFG% so 3s
+        get their proper weight: a tight-contested 3 hurts efficiency
+        more than a tight-contested 2, which is the signal we care about.
+        """
+        dd = self._first(PlayerDefenderDistanceShooting)
+        if not dd:
+            return None
+
+        very_tight = dd.very_tight_efg_pct
+        tight = dd.tight_efg_pct
+        open_ = dd.open_efg_pct
+        wide_open = dd.wide_open_efg_pct
+
+        buckets = [very_tight, tight, open_, wide_open]
+        present = [safe_float(b) for b in buckets if b is not None]
+        if not present:
+            return None
+
+        slope = None
+        if very_tight is not None and wide_open is not None:
+            slope = to_decimal(
+                safe_float(wide_open) - safe_float(very_tight), "0.001"
+            )
+        pressure_adj = to_decimal(sum(present) / len(present), "0.001")
+
+        return CardFrictionEfficiency(
+            very_tight_efg=very_tight,
+            tight_efg=tight,
+            open_efg=open_,
+            wide_open_efg=wide_open,
+            friction_slope=slope,
+            pressure_adjusted_efg=pressure_adj,
+        )
+
+    def _build_gravity_index(
+        self, on_off: PlayerOnOffStats | None
+    ) -> CardGravityIndex | None:
+        """Proxy gravity via tight-coverage share + team off-rating lift.
+
+        Combines two signals that are both weakly correlated with true
+        gravity (teammate CS3 defender-distance on/off isn't exposed by
+        the NBA Stats endpoints we ingest):
+        - tight_attention_rate: defenders assign tighter coverage to
+          threats, so a high share of very-tight + tight FGA indicates
+          the defense is respecting the player's gravity.
+        - team_off_lift: when a gravity player exits, offense usually
+          slips; positive lift is consistent with drawing attention.
+
+        Weighted 60/40 toward the defender-proximity signal because it's
+        a direct per-shot observation, where on/off is noisy at the
+        season level.
+        """
+        dd = self._first(PlayerDefenderDistanceShooting)
+        if not dd and not on_off:
+            return None
+
+        tight_attention = None
+        if dd and (dd.very_tight_fga_freq is not None or dd.tight_fga_freq is not None):
+            tight_attention = to_decimal(
+                safe_float(dd.very_tight_fga_freq) + safe_float(dd.tight_fga_freq),
+                "0.001",
+            )
+
+        team_lift = None
+        if on_off and on_off.off_rating_diff is not None:
+            team_lift = on_off.off_rating_diff
+
+        # 0-100 composite. Clamps inputs before weighting.
+        # tight_attention: league-wide leaders sit around 0.55; floor ~0.25.
+        # team_lift: typical range -8 .. +12 pts/100 poss.
+        tight_norm = 0.0
+        if tight_attention is not None:
+            tight_norm = max(0.0, min(1.0, (safe_float(tight_attention) - 0.25) / 0.30))
+        lift_norm = 0.0
+        if team_lift is not None:
+            lift_norm = max(0.0, min(1.0, (safe_float(team_lift) + 8.0) / 20.0))
+
+        if tight_attention is None and team_lift is None:
+            return None
+        # Weight absent signal to 0 and renormalize so one-sided data
+        # still produces a score on the same 0-100 scale.
+        weights = (
+            0.6 if tight_attention is not None else 0.0,
+            0.4 if team_lift is not None else 0.0,
+        )
+        total_w = weights[0] + weights[1]
+        if total_w == 0:
+            return None
+        gravity = (
+            100.0 * (tight_norm * weights[0] + lift_norm * weights[1]) / total_w
+        )
+
+        return CardGravityIndex(
+            tight_attention_rate=tight_attention,
+            team_off_lift=team_lift,
+            gravity_index=to_decimal(gravity, "0.1"),
+        )
+
+    @staticmethod
+    def _build_shot_diet(
+        play_types: SeasonPlayTypeStats | None,
+    ) -> CardShotDiet | None:
+        """Shannon entropy over the player's offensive play-type mix.
+
+        Uses NBA's `_freq` fields directly (they sum to ~1.0 across the
+        nine tracked play types). Normalized entropy = entropy / log2(n)
+        so values live on [0, 1] regardless of how many modes are
+        populated for this player.
+        """
+        if not play_types:
+            return None
+        attrs = [
+            ("isolation", "isolation_freq"),
+            ("pnr_ball_handler", "pnr_ball_handler_freq"),
+            ("pnr_roll_man", "pnr_roll_man_freq"),
+            ("post_up", "post_up_freq"),
+            ("spot_up", "spot_up_freq"),
+            ("transition", "transition_freq"),
+            ("cut", "cut_freq"),
+            ("off_screen", "off_screen_freq"),
+            ("handoff", "handoff_freq"),
+        ]
+        freq_pairs: list[tuple[str, float]] = []
+        for name, attr in attrs:
+            v = safe_float(getattr(play_types, attr, None))
+            if v > 0:
+                freq_pairs.append((name, v))
+        if not freq_pairs:
+            return None
+
+        # Renormalize in case NBA's freqs drift from 1.0 due to rounding.
+        total = sum(v for _, v in freq_pairs)
+        if total <= 0:
+            return None
+        probs = [(name, v / total) for name, v in freq_pairs]
+
+        entropy = -sum(p * math.log2(p) for _, p in probs if p > 0)
+        n = len(probs)
+        max_entropy = math.log2(n) if n > 1 else 1.0
+        entropy_norm = entropy / max_entropy if max_entropy > 0 else 0.0
+
+        primary_modes = sum(1 for _, p in probs if p >= 0.10)
+        top_name, top_p = max(probs, key=lambda kv: kv[1])
+
+        return CardShotDiet(
+            entropy=to_decimal(entropy, "0.01"),
+            entropy_normalized=to_decimal(entropy_norm, "0.001"),
+            primary_modes=primary_modes,
+            top_play_type=top_name,
+            top_play_type_freq=to_decimal(top_p, "0.001"),
+        )
+
+    def _build_rim_gravity(
+        self, shot_zones: list[PlayerShotZones]
+    ) -> CardRimGravity | None:
+        """How much a player bends the defense toward the rim.
+
+        Signals combined (each clamped to a reference upper bound so the
+        composite lives on 0-100):
+        - paint_touches / game (volume inside)
+        - drives / game (attack-the-rim volume)
+        - rim FG% lift vs. league average (finishing quality)
+        - paint-touch pts/touch (scoring efficiency from paint)
+        """
+        touches = self._first(PlayerTouchesBreakdown)
+        shooting = self._first(PlayerShootingTracking)
+
+        paint_touches = touches.paint_touches if touches else None
+        drives = shooting.drives if shooting else None
+        paint_ppt = touches.paint_touch_pts_per_touch if touches else None
+
+        # Rim FG% from the Restricted Area zone row (if present).
+        rim_fg_pct = None
+        for sz in shot_zones or []:
+            if sz.zone and "restricted" in sz.zone.lower():
+                rim_fg_pct = sz.fg_pct
+                break
+
+        if all(
+            v is None for v in (paint_touches, drives, rim_fg_pct, paint_ppt)
+        ):
+            return None
+
+        # Reference ceilings picked from top-of-league values.
+        pt_norm = min(1.0, safe_float(paint_touches) / 25.0)
+        dv_norm = min(1.0, safe_float(drives) / 20.0)
+        rim_lift = safe_float(rim_fg_pct) - self._LEAGUE_AVG_RIM_FG_PCT
+        # +15pp above league avg is elite, -5pp is poor.
+        rim_norm = max(0.0, min(1.0, (rim_lift + 0.05) / 0.20))
+        ppt_norm = min(1.0, safe_float(paint_ppt) / 1.0)
+
+        score = 100.0 * (
+            0.30 * pt_norm + 0.30 * dv_norm + 0.20 * rim_norm + 0.20 * ppt_norm
+        )
+
+        rim_delta = None
+        if rim_fg_pct is not None:
+            rim_delta = to_decimal(rim_lift, "0.001")
+
+        return CardRimGravity(
+            paint_touches_per_game=paint_touches,
+            drives_per_game=drives,
+            rim_fg_pct=rim_fg_pct,
+            rim_fg_pct_vs_league=rim_delta,
+            paint_pts_per_touch=paint_ppt,
+            rim_gravity_score=to_decimal(score, "0.1"),
+        )
+
+    def _build_pass_funnel(
+        self,
+        current_career: PlayerCareerStats | None,
+        season_stat: SeasonStats | None,
+        gp: int,
+    ) -> CardPassFunnel | None:
+        """Passes -> potential assists -> actual assists -> hockey assists.
+
+        `potential_to_actual_pct` captures teammate shot conversion on
+        shots the player set up. `cascade_rate` (secondary assists per
+        100 passes) captures chain playmaking — the player's pass starts
+        an action that ends in an assist.
+        """
+        passing = self._first(PlayerPassingStats)
+        if not passing:
+            return None
+
+        passes_made = passing.passes_made
+        potential_ast = passing.potential_ast
+        secondary_ast = passing.secondary_ast
+
+        # Prefer per-game APG from current_career (already per-game).
+        # Fall back to season_stat total_assists / gp for consistency.
+        apg: Decimal | None = None
+        if current_career and current_career.apg is not None:
+            apg = current_career.apg
+        elif season_stat and season_stat.total_assists is not None and gp > 0:
+            apg = to_decimal(safe_float(season_stat.total_assists) / gp, "0.01")
+
+        pm_f = safe_float(passes_made)
+        pa_f = safe_float(potential_ast)
+        ast_f = safe_float(apg)
+        sa_f = safe_float(secondary_ast)
+
+        pass_to_pot = (
+            to_decimal(pa_f / pm_f * 100, "0.01") if pm_f > 0 and pa_f > 0 else None
+        )
+        pot_to_act = (
+            to_decimal(ast_f / pa_f * 100, "0.01") if pa_f > 0 and ast_f > 0 else None
+        )
+        pass_to_act = (
+            to_decimal(ast_f / pm_f * 100, "0.01") if pm_f > 0 and ast_f > 0 else None
+        )
+        cascade = (
+            to_decimal(sa_f / pm_f * 100, "0.01") if pm_f > 0 and sa_f > 0 else None
+        )
+
+        return CardPassFunnel(
+            passes_made=passes_made,
+            potential_ast=potential_ast,
+            ast=apg,
+            secondary_ast=secondary_ast,
+            pass_to_potential_pct=pass_to_pot,
+            potential_to_actual_pct=pot_to_act,
+            pass_to_actual_pct=pass_to_act,
+            cascade_rate=cascade,
+        )
+
+    # ------------------------------------------------------------------
+    # Batch 2: leverage / tempo / defense terrain signals
+    # ------------------------------------------------------------------
+
+    # A game counts as "leverage" when |plus_minus| <= this cutoff.
+    # 15 is the common public-analytics threshold for "meaningful minutes"
+    # without being so tight it rejects normal NBA blowouts.
+    _LEVERAGE_PM_CUTOFF = 15
+
+    # Late/early-season trend window. Uses the first N and last N games
+    # of the season for the player when at least 2*N games are logged.
+    _TREND_WINDOW = 10
+
+    def _build_leverage_ts(self) -> CardLeverageTs | None:
+        """Split a player's per-game TS% into leverage vs. blowout buckets.
+
+        Per-game TS% = pts / (2 * (fga + 0.44 * fta)). Games with fga == 0
+        are skipped (no shots attempted). Leverage = |plus_minus| <= 15.
+        """
+        rows = (
+            self._db.query(GameStats)
+            .filter(
+                GameStats.player_id == self._player_id,
+                GameStats.season == self._season,
+            )
+            .all()
+        )
+        if not rows:
+            return None
+
+        def _ts(pts: float, fga: float, fta: float) -> float | None:
+            denom = 2.0 * (fga + 0.44 * fta)
+            return pts / denom if denom > 0 else None
+
+        all_num = 0.0
+        all_den = 0.0
+        lev_num = 0.0
+        lev_den = 0.0
+        blow_num = 0.0
+        blow_den = 0.0
+        lev_games = 0
+        blow_games = 0
+
+        for r in rows:
+            pts = safe_float(r.points)
+            fga = safe_float(r.fga)
+            fta = safe_float(r.fta)
+            pm = safe_float(r.plus_minus) if r.plus_minus is not None else None
+            denom = 2.0 * (fga + 0.44 * fta)
+            if denom <= 0:
+                continue
+            all_num += pts
+            all_den += denom
+            if pm is not None and abs(pm) <= self._LEVERAGE_PM_CUTOFF:
+                lev_num += pts
+                lev_den += denom
+                lev_games += 1
+            elif pm is not None:
+                blow_num += pts
+                blow_den += denom
+                blow_games += 1
+
+        if all_den <= 0:
+            return None
+
+        overall_ts = all_num / all_den
+        leverage_ts = (lev_num / lev_den) if lev_den > 0 else None
+        blowout_ts = (blow_num / blow_den) if blow_den > 0 else None
+        delta = (
+            (leverage_ts - overall_ts)
+            if leverage_ts is not None
+            else None
+        )
+
+        return CardLeverageTs(
+            overall_ts_pct=to_decimal(overall_ts, "0.001"),
+            leverage_ts_pct=(
+                to_decimal(leverage_ts, "0.001") if leverage_ts is not None else None
+            ),
+            blowout_ts_pct=(
+                to_decimal(blowout_ts, "0.001") if blowout_ts is not None else None
+            ),
+            ts_leverage_delta=(
+                to_decimal(delta, "0.001") if delta is not None else None
+            ),
+            leverage_games=lev_games,
+            blowout_games=blow_games,
+        )
+
+    def _build_possession_dwell(
+        self, season_stat: SeasonStats | None, gp: int
+    ) -> CardPossessionDwell | None:
+        """Derive ball-holding efficiency from season totals.
+
+        avg_sec_per_touch  = total_time_of_possession / total_touches
+        pts_per_touch      = total_points / total_touches
+        pts_per_second     = total_points / total_time_of_possession
+        creation_per_second= (pts + 0.5 * ast) / time  (discount ast so
+            we don't double-count a pass + teammate shot)
+        dwell_score (0-100): 100 * pts_per_second / 0.45 (clamped). 0.45
+            pts/sec is roughly top-of-league territory.
+        """
+        if not season_stat:
+            return None
+        touches = safe_float(season_stat.total_touches)
+        time_poss = safe_float(season_stat.total_time_of_possession)
+        pts = safe_float(season_stat.total_points)
+        ast = safe_float(season_stat.total_assists)
+        if touches <= 0 or time_poss <= 0:
+            return None
+
+        sec_per_touch = time_poss / touches
+        pts_per_touch = pts / touches
+        pts_per_second = pts / time_poss
+        creation_per_second = (pts + 0.5 * ast) / time_poss
+
+        # Reference ceiling: 0.45 pts/sec is near the top of the league.
+        dwell_score = min(100.0, (pts_per_second / 0.45) * 100.0)
+
+        return CardPossessionDwell(
+            avg_sec_per_touch=to_decimal(sec_per_touch, "0.01"),
+            pts_per_touch=to_decimal(pts_per_touch, "0.001"),
+            pts_per_second=to_decimal(pts_per_second, "0.001"),
+            creation_per_second=to_decimal(creation_per_second, "0.001"),
+            dwell_efficiency_score=to_decimal(dwell_score, "0.1"),
+        )
+
+    def _build_mile_production(
+        self, current_career: PlayerCareerStats | None, gp: int
+    ) -> CardMileProduction | None:
+        """Offensive output per mile traveled.
+
+        Uses per-game distance from PlayerSpeedDistance. Production =
+        ppg + apg. Also reports production per OFFENSIVE mile since the
+        split is what a player runs to create, not what they run chasing.
+        """
+        sd = self._first(PlayerSpeedDistance)
+        if not sd or sd.dist_miles is None or safe_float(sd.dist_miles) <= 0:
+            return None
+
+        ppg = safe_float(current_career.ppg if current_career else None)
+        apg = safe_float(current_career.apg if current_career else None)
+        if ppg <= 0 and apg <= 0:
+            return None
+
+        dist_miles = safe_float(sd.dist_miles)
+        dist_miles_off = safe_float(sd.dist_miles_off)
+        pts_ast = ppg + apg
+        per_mile = pts_ast / dist_miles
+        per_off_mile = (pts_ast / dist_miles_off) if dist_miles_off > 0 else None
+        off_share = (dist_miles_off / dist_miles) if dist_miles > 0 else None
+
+        return CardMileProduction(
+            dist_miles_per_game=sd.dist_miles,
+            dist_miles_off_share=(
+                to_decimal(off_share, "0.001") if off_share is not None else None
+            ),
+            pts_ast_per_game=to_decimal(pts_ast, "0.01"),
+            production_per_mile=to_decimal(per_mile, "0.01"),
+            production_per_off_mile=(
+                to_decimal(per_off_mile, "0.01") if per_off_mile is not None else None
+            ),
+        )
+
+    def _build_late_season_trend(self) -> CardLateSeasonTrend | None:
+        """Compare game_score in the first N games vs. the last N games.
+
+        A fatigue/engagement proxy — NBA Stats does not expose per-
+        quarter tracking at the ingest layer, so we use season-tails
+        instead. Requires at least 2*N games with non-null game_score.
+        """
+        rows = (
+            self._db.query(GameStats)
+            .filter(
+                GameStats.player_id == self._player_id,
+                GameStats.season == self._season,
+                GameStats.game_score.isnot(None),
+            )
+            .order_by(GameStats.game_date.asc())
+            .all()
+        )
+        n = self._TREND_WINDOW
+        if len(rows) < 2 * n:
+            return None
+
+        early = rows[:n]
+        late = rows[-n:]
+
+        def _avg(attr: str, sample: list[GameStats]) -> float:
+            vals = [safe_float(getattr(g, attr)) for g in sample]
+            return sum(vals) / len(vals) if vals else 0.0
+
+        early_gs = _avg("game_score", early)
+        late_gs = _avg("game_score", late)
+        early_min = _avg("minutes", early)
+        late_min = _avg("minutes", late)
+
+        return CardLateSeasonTrend(
+            early_games=n,
+            late_games=n,
+            early_game_score=to_decimal(early_gs, "0.01"),
+            late_game_score=to_decimal(late_gs, "0.01"),
+            trend_delta=to_decimal(late_gs - early_gs, "0.01"),
+            early_minutes_avg=to_decimal(early_min, "0.01"),
+            late_minutes_avg=to_decimal(late_min, "0.01"),
+        )
+
+    @staticmethod
+    def _build_defensive_terrain(
+        defense: PlayerDefensiveStats | None,
+    ) -> CardDefensiveTerrain | None:
+        """Weighted stopping-power across rim / mid / 3PT zones.
+
+        Mid-range freq is inferred as max(0, 1 - rim_freq - three_freq)
+        and uses overall_pct_plusminus as the best available proxy
+        (there's no dedicated mid-range defense row). terrain_score
+        maps the weighted plus/minus total to 0-100: +0.06 (league-
+        leading suppression) -> ~90, 0 -> 50, -0.06 -> ~10.
+        """
+        if not defense:
+            return None
+
+        rim_freq = safe_float(defense.rim_freq)
+        three_freq = safe_float(defense.three_pt_freq)
+        mid_freq = max(0.0, 1.0 - rim_freq - three_freq)
+
+        rim_pm = safe_float(defense.rim_pct_plusminus)
+        three_pm = safe_float(defense.three_pt_pct_plusminus)
+        # Overall_pct_plusminus covers all shots; we reuse it as the
+        # best available mid-range proxy since rim/3PT cover the tails.
+        overall_pm = safe_float(defense.overall_pct_plusminus)
+
+        # Contribution = freq * (-plus_minus). Negative plus_minus =
+        # opponent shoots worse than usual, which we want to reward.
+        rim_contrib = rim_freq * (-rim_pm)
+        mid_contrib = mid_freq * (-overall_pm)
+        three_contrib = three_freq * (-three_pm)
+        weighted = rim_contrib + mid_contrib + three_contrib
+
+        # 0.06 ≈ 6 percentage points below league norm — elite defender.
+        score = max(0.0, min(100.0, 50.0 + (weighted / 0.06) * 40.0))
+
+        return CardDefensiveTerrain(
+            rim_freq=defense.rim_freq,
+            rim_plus_minus=defense.rim_pct_plusminus,
+            rim_contribution=to_decimal(rim_contrib, "0.001"),
+            mid_freq=to_decimal(mid_freq, "0.001"),
+            mid_plus_minus=defense.overall_pct_plusminus,
+            mid_contribution=to_decimal(mid_contrib, "0.001"),
+            three_freq=defense.three_pt_freq,
+            three_plus_minus=defense.three_pt_pct_plusminus,
+            three_contribution=to_decimal(three_contrib, "0.001"),
+            terrain_score=to_decimal(score, "0.1"),
+        )
+
+    @staticmethod
+    def _build_contest_conversion(
+        season_stat: SeasonStats | None,
+        defense: PlayerDefensiveStats | None,
+        gp: int,
+    ) -> CardContestConversion | None:
+        """Defensive disruption volume + conversion to forced misses.
+
+        Scope mismatch caveat: contested_shots (from SeasonStats) counts
+        every shot the player contested — including help contests on
+        teammates' coverages. Defended FGA (from PlayerDefensiveStats)
+        only counts shots where this player was the NEAREST defender.
+        Surfacing both per-game rates preserves that distinction.
+        """
+        if not season_stat and not defense:
+            return None
+        gp_i = max(1, gp)
+
+        contests = safe_float(season_stat.total_contested_shots) if season_stat else 0.0
+        defended_fga = safe_float(defense.overall_d_fga) if defense else 0.0
+        defended_fgm = safe_float(defense.overall_d_fgm) if defense else 0.0
+        misses_forced = max(0.0, defended_fga - defended_fgm)
+
+        if contests <= 0 and defended_fga <= 0:
+            return None
+
+        contests_pg = contests / gp_i if contests > 0 else None
+        defended_pg = defended_fga / gp_i if defended_fga > 0 else None
+        misses_pg = misses_forced / gp_i if defended_fga > 0 else None
+        miss_rate = (
+            (misses_forced / defended_fga) if defended_fga > 0 else None
+        )
+
+        # Volume ceiling ~15 contests/g, efficiency ceiling ~0.70 miss rate.
+        vol_norm = min(1.0, (contests_pg or 0.0) / 15.0)
+        eff_norm = min(1.0, max(0.0, ((miss_rate or 0.0) - 0.40) / 0.30))
+        score = 100.0 * (0.5 * vol_norm + 0.5 * eff_norm)
+
+        return CardContestConversion(
+            contests_per_game=(
+                to_decimal(contests_pg, "0.01") if contests_pg is not None else None
+            ),
+            defended_fga_per_game=(
+                to_decimal(defended_pg, "0.01") if defended_pg is not None else None
+            ),
+            misses_forced_per_game=(
+                to_decimal(misses_pg, "0.01") if misses_pg is not None else None
+            ),
+            miss_rate=(
+                to_decimal(miss_rate, "0.001") if miss_rate is not None else None
+            ),
+            contest_to_miss_score=to_decimal(score, "0.1"),
+        )
+
+    # ------------------------------------------------------------------
+    # Batch 3: lineup buoyancy + scheme robustness
+    # ------------------------------------------------------------------
+
+    # Below this per-lineup minute floor we ignore the lineup — tercile
+    # math on 3-minute samples is noise, not signal.
+    _BUOYANCY_MIN_LINEUP_MINUTES = Decimal("20")
+    # Need at least this many qualifying lineups to report terciles.
+    _BUOYANCY_MIN_LINEUPS = 4
+    # Per-play-type sample floor for robustness analysis. Under 25 poss
+    # the PPP is too noisy to include in a variance comparison.
+    _ROBUSTNESS_MIN_POSSESSIONS = 25
+
+    def _build_lineup_buoyancy(self) -> CardLineupBuoyancy | None:
+        """Floor-raiser vs ceiling-raiser signal across a player's lineups.
+
+        Partitions qualifying lineups (>= 20 min) into terciles by net
+        rating, then minutes-weights each tercile. A high worst-tercile
+        NRtg means the player keeps bad combos afloat (floor raiser);
+        a dominant best-tercile NRtg means they amplify already-good
+        combos (ceiling raiser).
+        """
+        lineups = (
+            self._db.query(LineupStats)
+            .filter(
+                LineupStats.season == self._season,
+                or_(
+                    LineupStats.player1_id == self._player_id,
+                    LineupStats.player2_id == self._player_id,
+                    LineupStats.player3_id == self._player_id,
+                    LineupStats.player4_id == self._player_id,
+                    LineupStats.player5_id == self._player_id,
+                ),
+            )
+            .all()
+        )
+        if not lineups:
+            return None
+
+        qualifying = [
+            lu
+            for lu in lineups
+            if lu.minutes is not None
+            and lu.net_rating is not None
+            and lu.minutes >= self._BUOYANCY_MIN_LINEUP_MINUTES
+        ]
+        if len(qualifying) < self._BUOYANCY_MIN_LINEUPS:
+            return None
+
+        # Sort ascending by net rating so the worst-performing lineups
+        # come first. Tercile split by count, not by minutes, since we
+        # want a representative sample of bad-lineup outcomes.
+        qualifying.sort(key=lambda lu: lu.net_rating)
+        n = len(qualifying)
+        tercile_size = max(1, n // 3)
+        worst = qualifying[:tercile_size]
+        best = qualifying[-tercile_size:]
+
+        def _weighted_avg(rows: list[LineupStats]) -> tuple[Decimal, Decimal]:
+            total_min = sum((lu.minutes for lu in rows), Decimal("0"))
+            if total_min <= 0:
+                return Decimal("0"), Decimal("0")
+            weighted = sum(
+                (lu.net_rating * lu.minutes for lu in rows), Decimal("0")
+            )
+            return (weighted / total_min).quantize(Decimal("0.01")), total_min.quantize(Decimal("0.01"))
+
+        worst_net, worst_min = _weighted_avg(worst)
+        best_net, best_min = _weighted_avg(best)
+        median_net = qualifying[n // 2].net_rating
+        spread = (best_net - worst_net).quantize(Decimal("0.01"))
+        total_qual_min = sum(
+            (lu.minutes for lu in qualifying), Decimal("0")
+        ).quantize(Decimal("0.01"))
+
+        # Normalize NRtgs to 0-100 for an intuitive floor/ceiling read.
+        # -15 -> 0, +15 -> 100, clamped. Same scale for both so they're
+        # directly comparable on the UI.
+        def _score(nrtg: Decimal) -> float:
+            return max(0.0, min(100.0, (float(nrtg) + 15.0) / 30.0 * 100.0))
+
+        floor_score = _score(worst_net)
+        ceiling_score = _score(best_net)
+
+        # Classification. Thresholds chosen to line up with the 0-100
+        # score scale above and to require clear separation before
+        # labeling someone a specialist.
+        if floor_score >= 60 and ceiling_score >= 75:
+            buoyancy_type = "Two-Way Lift"
+        elif floor_score >= 60:
+            buoyancy_type = "Floor Raiser"
+        elif ceiling_score >= 75 and floor_score < 50:
+            buoyancy_type = "Ceiling Amplifier"
+        elif ceiling_score < 50 and floor_score < 40:
+            buoyancy_type = "Passenger"
+        else:
+            buoyancy_type = "Neutral"
+
+        return CardLineupBuoyancy(
+            total_lineups=n,
+            qualifying_minutes=total_qual_min,
+            worst_tercile_net_rtg=worst_net,
+            worst_tercile_minutes=worst_min,
+            best_tercile_net_rtg=best_net,
+            best_tercile_minutes=best_min,
+            median_lineup_net_rtg=median_net,
+            lineup_spread=spread,
+            floor_score=to_decimal(floor_score, "0.1"),
+            ceiling_score=to_decimal(ceiling_score, "0.1"),
+            buoyancy_type=buoyancy_type,
+        )
+
+    def _build_scheme_robustness(
+        self, play_types: SeasonPlayTypeStats | None
+    ) -> CardSchemeRobustness | None:
+        """Coefficient-of-variation across the player's top 3 play types.
+
+        Low CV on high PPP = scheme-proof scorer. High CV = one mode
+        carries them and the rest collapse (scheme-dependent). Uses
+        a 25-poss floor to keep noisy minor modes out of the variance.
+        """
+        if not play_types:
+            return None
+
+        attrs = [
+            ("isolation", "isolation_freq", "isolation_ppp", "isolation_poss"),
+            ("pnr_ball_handler", "pnr_ball_handler_freq", "pnr_ball_handler_ppp", "pnr_ball_handler_poss"),
+            ("pnr_roll_man", "pnr_roll_man_freq", "pnr_roll_man_ppp", "pnr_roll_man_poss"),
+            ("post_up", "post_up_freq", "post_up_ppp", "post_up_poss"),
+            ("spot_up", "spot_up_freq", "spot_up_ppp", "spot_up_poss"),
+            ("transition", "transition_freq", "transition_ppp", "transition_poss"),
+            ("cut", "cut_freq", "cut_ppp", "cut_poss"),
+            ("off_screen", "off_screen_freq", "off_screen_ppp", "off_screen_poss"),
+            ("handoff", "handoff_freq", "handoff_ppp", "handoff_poss"),
+        ]
+        candidates: list[tuple[str, float, float, int]] = []
+        for name, freq_attr, ppp_attr, poss_attr in attrs:
+            poss = getattr(play_types, poss_attr, None) or 0
+            freq = safe_float(getattr(play_types, freq_attr, None))
+            ppp = safe_float(getattr(play_types, ppp_attr, None))
+            if poss >= self._ROBUSTNESS_MIN_POSSESSIONS and freq > 0 and ppp > 0:
+                candidates.append((name, freq, ppp, poss))
+
+        if len(candidates) < 3:
+            return None
+
+        # Pick the top 3 by frequency share.
+        candidates.sort(key=lambda row: row[1], reverse=True)
+        top3 = candidates[:3]
+        names = [row[0] for row in top3]
+        ppps = [row[2] for row in top3]
+
+        mean_ppp = sum(ppps) / len(ppps)
+        variance = sum((p - mean_ppp) ** 2 for p in ppps) / len(ppps)
+        std = math.sqrt(variance)
+        cv = std / mean_ppp if mean_ppp > 0 else 0.0
+
+        # 0.20 CV = essentially scheme-dependent (one mode >> others).
+        # 0.02 CV = tightly clustered, scheme-proof.
+        collapse_risk = max(0.0, min(100.0, cv / 0.20 * 100.0))
+        robustness = 100.0 - collapse_risk
+
+        return CardSchemeRobustness(
+            top_play_types=names,
+            top_play_type_ppps=[to_decimal(p, "0.001") for p in ppps],
+            ppp_mean=to_decimal(mean_ppp, "0.001"),
+            ppp_std=to_decimal(std, "0.001"),
+            coefficient_of_variation=to_decimal(cv, "0.001"),
+            collapse_risk_score=to_decimal(collapse_risk, "0.1"),
+            robustness_score=to_decimal(robustness, "0.1"),
+        )
+

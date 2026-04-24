@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import type { CortexPlayer } from '@/data/cortexTypes'
 import { api } from '@/lib/api'
@@ -35,6 +36,7 @@ const decodeOption = (value: string): { id: number; season: string } => {
 }
 
 export default function PlayerCardPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [selectedValue, setSelectedValue] = useState<string>('')
   const [activeTab, setActiveTab] = useState<TabName>('Overview')
   const [animKey, setAnimKey] = useState(0)
@@ -50,12 +52,33 @@ export default function PlayerCardPage() {
     queryFn: () => api.players.available(),
   })
 
-  // Default-select the first available option once it arrives.
+  // Pre-select from URL params (?playerId=X&season=Y) if present, otherwise
+  // fall back to the first option.
   useEffect(() => {
-    if (!selectedValue && options.length > 0) {
-      setSelectedValue(encodeOption(options[0].id, options[0].season))
+    if (selectedValue || options.length === 0) return
+    const urlPlayerId = searchParams.get('playerId')
+    const urlSeason = searchParams.get('season')
+    if (urlPlayerId) {
+      const match = options.find(
+        (o) => o.id === Number(urlPlayerId) && (!urlSeason || o.season === urlSeason),
+      )
+      if (match) {
+        setSelectedValue(encodeOption(match.id, match.season))
+        return
+      }
     }
-  }, [options, selectedValue])
+    setSelectedValue(encodeOption(options[0].id, options[0].season))
+  }, [options, selectedValue, searchParams])
+
+  // Keep the URL in sync with the dropdown so the card is shareable/linkable.
+  useEffect(() => {
+    if (!selectedValue) return
+    const { id, season } = decodeOption(selectedValue)
+    const urlPlayerId = searchParams.get('playerId')
+    const urlSeason = searchParams.get('season')
+    if (urlPlayerId === String(id) && urlSeason === season) return
+    setSearchParams({ playerId: String(id), season }, { replace: true })
+  }, [selectedValue, searchParams, setSearchParams])
 
   // Decode selection for the card query. React Query keys the request on
   // (id, season) so stale responses for prior selections are discarded

@@ -55,7 +55,7 @@ function PlayerRow({ player, rank, statKey }: { player: PlayerPerGameStats; rank
 
 export default function LeagueLeadersPage() {
   const [activeTab, setActiveTab] = useState<StatKey>('ppg')
-  const [selectedSeason, setSelectedSeason] = useState<string>('2024-25')
+  const [selectedSeason, setSelectedSeason] = useState<string>('2025-26')
   const { data: seasons } = useLeaderboardSeasons()
   const { data: players, isLoading, error } = usePerGameLeaderboard(activeTab, selectedSeason, 50)
 
@@ -63,7 +63,7 @@ export default function LeagueLeadersPage() {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">League Leaders</h1>
-        <p className="text-gray-600 mt-1">Per game stats for the 2024-25 season</p>
+        <p className="text-gray-600 mt-1">Per game stats for the {selectedSeason} season</p>
       </div>
 
       <div className="flex gap-2 mb-6">

@@ -1,9 +1,17 @@
 import type { CortexPlayer } from '@/data/cortexTypes'
-import { SectionHeader, StatBox, DiffBadge, qualityColor } from './shared'
+import { SectionHeader, StatBox, DiffBadge, qualityColor, fitColor } from './shared'
+
+function formatSignedPct(value: number): string {
+  const sign = value > 0 ? '+' : ''
+  return `${sign}${value.toFixed(1)}%`
+}
 
 export default function DefenseTab({ player }: { player: CortexPlayer }) {
   const d = player.defensive
   const o = d.overview
+  const terrain = player.defensiveTerrain
+  const cc = player.contestConversion
+  const hasAdvancedDefense = Boolean(terrain || cc)
 
   return (
     <div>
@@ -128,6 +136,107 @@ export default function DefenseTab({ player }: { player: CortexPlayer }) {
                 ))}
               </tbody>
             </table>
+          </div>
+        </>
+      )}
+
+      {hasAdvancedDefense && (
+        <>
+          <SectionHeader title="Advanced Defense Signals" tag="DERIVED METRICS" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+            {terrain && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">
+                  Defensive Terrain
+                  <span className="ml-2 normal-case tracking-normal text-gray-400">zone-weighted stopping power</span>
+                </p>
+                <div className="flex items-center gap-4 mb-3">
+                  <div className="flex-1">
+                    <div className="w-full bg-gray-100 rounded-full h-3">
+                      <div
+                        className={`h-3 rounded-full ${fitColor(terrain.terrainScore)}`}
+                        style={{ width: `${terrain.terrainScore}%` }}
+                      />
+                    </div>
+                  </div>
+                  <span className="text-2xl font-mono font-bold text-gray-900 w-16 text-right">
+                    {terrain.terrainScore.toFixed(1)}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {[
+                    { label: 'Rim', freq: terrain.rimFreq, pm: terrain.rimPlusMinus, contrib: terrain.rimContribution },
+                    { label: 'Mid', freq: terrain.midFreq, pm: terrain.midPlusMinus, contrib: terrain.midContribution },
+                    { label: '3PT', freq: terrain.threeFreq, pm: terrain.threePlusMinus, contrib: terrain.threeContribution },
+                  ].map((row) => {
+                    const good = row.contrib > 0
+                    return (
+                      <div key={row.label} className="flex items-center gap-3 text-xs">
+                        <span className="w-10 text-gray-600 font-medium">{row.label}</span>
+                        <span className="w-16 text-right font-mono text-gray-500">
+                          {(row.freq * 100).toFixed(1)}%
+                        </span>
+                        <span className={`w-20 text-right font-mono font-bold ${good ? 'text-green-600' : 'text-red-600'}`}>
+                          {formatSignedPct(row.pm * 100)}
+                        </span>
+                        <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+                          <div
+                            className={`h-1.5 rounded-full ${good ? 'bg-green-500' : 'bg-red-500'}`}
+                            style={{ width: `${Math.min(100, Math.abs(row.contrib) / 0.04 * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                <p className="text-[10px] text-gray-400 mt-3">
+                  Each row = frequency × (−opp FG% vs league). Negative opp FG% diff = suppression (good).
+                </p>
+              </div>
+            )}
+
+            {cc && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">
+                  Contest-to-Miss Conversion
+                  <span className="ml-2 normal-case tracking-normal text-gray-400">volume × efficiency</span>
+                </p>
+                <div className="flex items-center gap-4 mb-3">
+                  <div className="flex-1">
+                    <div className="w-full bg-gray-100 rounded-full h-3">
+                      <div
+                        className={`h-3 rounded-full ${fitColor(cc.contestToMissScore)}`}
+                        style={{ width: `${cc.contestToMissScore}%` }}
+                      />
+                    </div>
+                  </div>
+                  <span className="text-2xl font-mono font-bold text-gray-900 w-16 text-right">
+                    {cc.contestToMissScore.toFixed(1)}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <StatBox label="Contests / G" value={cc.contestsPerGame.toFixed(1)} />
+                  <StatBox
+                    label="Defended FGA / G"
+                    value={cc.defendedFgaPerGame.toFixed(1)}
+                    subtitle="as nearest D"
+                  />
+                  <StatBox
+                    label="Misses / G"
+                    value={cc.missesForcedPerGame.toFixed(1)}
+                    subtitle="primary-D only"
+                  />
+                  <StatBox
+                    label="Miss Rate"
+                    value={`${(cc.missRate * 100).toFixed(1)}%`}
+                    subtitle="of defended FGA"
+                  />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-3">
+                  Contests include help-side; defended FGA only counts primary coverage.
+                </p>
+              </div>
+            )}
           </div>
         </>
       )}

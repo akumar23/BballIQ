@@ -35,7 +35,18 @@ export interface CortexPlayer {
     subScores: { selfCreation: number; schemeFlexibility: number; defensiveSwitchability: number; lowDependency: number }
     selfCreation: { unassistedPct: number; assistedPct: number; selfCreatedPpp: number; gravityIndex: number; analysis: string }
     schemeCompatibility: Array<{ scheme: string; fitScore: number; note: string }>
-    teammateDependency: { eliteSpacingTS: number; poorSpacingTS: number; spacingDelta: number; withRimProtectorFg: number; withoutRimProtectorFg: number; dependencyScore: number }
+    teammateDependency: {
+      eliteSpacingNetRtg: number | null
+      eliteSpacingMinutes: number
+      poorSpacingNetRtg: number | null
+      poorSpacingMinutes: number
+      spacingDelta: number | null
+      withRimProtectorNetRtg: number | null
+      withRimProtectorMinutes: number
+      withoutRimProtectorNetRtg: number | null
+      withoutRimProtectorMinutes: number
+      dependencyScore: number
+    }
     defensiveSwitchability: { guardablePositions: string[]; switchScore: number; perimeterDfgDiff: number; pnrNavigation: number; scoutingNote: string }
     projectedFits: Array<{ team: string; archetype: string; projectedNetRtg: number; deltaFromCurrent: number; fitScore: number; reasoning: string }>
     historicalComps: Array<{ player: string; similarity: number; portabilityScore: number; analysis: string }>
@@ -79,5 +90,115 @@ export interface CortexPlayer {
     postUp: { poss: number; ppp: number; fgPct: number; tovPct: number; freq: number; percentile: number } | null
     spotUp: { poss: number; ppp: number; fgPct: number; tovPct: number; freq: number; percentile: number } | null
     transition: { poss: number; ppp: number; fgPct: number; tovPct: number; freq: number; percentile: number } | null
+  } | null
+  frictionEfficiency?: {
+    veryTightEfg: number
+    tightEfg: number
+    openEfg: number
+    wideOpenEfg: number
+    frictionSlope: number
+    pressureAdjustedEfg: number
+  } | null
+  gravityIndex?: {
+    tightAttentionRate: number
+    teamOffLift: number
+    gravityIndex: number
+  } | null
+  shotDiet?: {
+    entropy: number
+    entropyNormalized: number
+    primaryModes: number
+    topPlayType: string
+    topPlayTypeFreq: number
+  } | null
+  rimGravity?: {
+    paintTouchesPerGame: number
+    drivesPerGame: number
+    rimFgPct: number
+    rimFgPctVsLeague: number
+    paintPtsPerTouch: number
+    rimGravityScore: number
+  } | null
+  passFunnel?: {
+    passesMade: number
+    potentialAst: number
+    ast: number
+    secondaryAst: number
+    passToPotentialPct: number
+    potentialToActualPct: number
+    passToActualPct: number
+    cascadeRate: number
+  } | null
+  leverageTs?: {
+    overallTs: number
+    leverageTs: number
+    blowoutTs: number
+    tsLeverageDelta: number
+    leverageGames: number
+    blowoutGames: number
+  } | null
+  possessionDwell?: {
+    avgSecPerTouch: number
+    ptsPerTouch: number
+    ptsPerSecond: number
+    creationPerSecond: number
+    dwellEfficiencyScore: number
+  } | null
+  mileProduction?: {
+    distMilesPerGame: number
+    distMilesOffShare: number
+    ptsAstPerGame: number
+    productionPerMile: number
+    productionPerOffMile: number
+  } | null
+  lateSeasonTrend?: {
+    earlyGames: number
+    lateGames: number
+    earlyGameScore: number
+    lateGameScore: number
+    trendDelta: number
+    earlyMinutesAvg: number
+    lateMinutesAvg: number
+  } | null
+  defensiveTerrain?: {
+    rimFreq: number
+    rimPlusMinus: number
+    rimContribution: number
+    midFreq: number
+    midPlusMinus: number
+    midContribution: number
+    threeFreq: number
+    threePlusMinus: number
+    threeContribution: number
+    terrainScore: number
+  } | null
+  contestConversion?: {
+    contestsPerGame: number
+    defendedFgaPerGame: number
+    missesForcedPerGame: number
+    missRate: number
+    contestToMissScore: number
+  } | null
+  lineupBuoyancy?: {
+    totalLineups: number
+    qualifyingMinutes: number
+    worstTercileNetRtg: number
+    worstTercileMinutes: number
+    bestTercileNetRtg: number
+    bestTercileMinutes: number
+    medianLineupNetRtg: number
+    lineupSpread: number
+    floorScore: number
+    ceilingScore: number
+    buoyancyType: string
+  } | null
+  schemeRobustness?: {
+    topPlayTypes: string[]
+    topPlayTypePpps: number[]
+    pppMean: number
+    pppStd: number
+    coefficientOfVariation: number
+    collapseRiskScore: number
+    robustnessScore: number
   } | null
 }

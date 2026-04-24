@@ -4,6 +4,9 @@ export interface PlayerMetrics {
   overall_metric: number | null
   offensive_percentile: number | null
   defensive_percentile: number | null
+  composite_score?: number | null
+  composite_rank?: number | null
+  category_scores?: Record<string, number> | null
 }
 
 export interface PlayerTrackingStats {

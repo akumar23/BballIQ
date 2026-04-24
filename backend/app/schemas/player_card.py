@@ -126,6 +126,9 @@ class CardDefenseOverview(BaseModel):
     blk_rate: Decimal | None = None
     deflections_per_game: Decimal | None = None
     rim_contests_per_game: Decimal | None = None
+    # 1-indexed league rank by rapm_defense among qualified players
+    # (>= 500 total minutes this season). None if player doesn't qualify.
+    rank: int | None = None
 
 
 class CardDefensive(BaseModel):
@@ -160,6 +163,9 @@ class CardCareerSeason(BaseModel):
     per: Decimal | None = None
     ws48: Decimal | None = None
     bpm: Decimal | None = None
+    # EPM proxy sourced from DarkoHistory.dpm for the matching season year.
+    # DARKO season convention: season string "2022-23" maps to integer year 2023.
+    epm: Decimal | None = None
 
 
 class CardAllInOne(BaseModel):
@@ -213,6 +219,29 @@ class CardSchemeScore(BaseModel):
     fit_score: Decimal | None = None
 
 
+class CardTeammateDependency(BaseModel):
+    """On-court net rating splits by teammate context.
+
+    Aggregates the player's 5-man lineup net ratings into buckets defined
+    by teammate attributes (spacers / rim protectors). Each bucket is a
+    minutes-weighted average of net_rating across lineups that match the
+    bucket criterion, with total bucket minutes reported for reliability.
+
+    Values are `None` when the bucket has insufficient minutes (< 50) to
+    be meaningful.
+    """
+
+    elite_spacing_net_rtg: Decimal | None = None
+    elite_spacing_minutes: Decimal | None = None
+    poor_spacing_net_rtg: Decimal | None = None
+    poor_spacing_minutes: Decimal | None = None
+    spacing_delta: Decimal | None = None
+    with_rim_protector_net_rtg: Decimal | None = None
+    with_rim_protector_minutes: Decimal | None = None
+    without_rim_protector_net_rtg: Decimal | None = None
+    without_rim_protector_minutes: Decimal | None = None
+
+
 class CardPortability(BaseModel):
     index: Decimal | None = None
     grade: str | None = None
@@ -226,6 +255,7 @@ class CardPortability(BaseModel):
     creation_volume_score: Decimal | None = None
     positions_guarded: dict[str, Decimal | None] | None = None
     scheme_scores: list[CardSchemeScore] = []
+    teammate_dependency: CardTeammateDependency | None = None
 
 
 class CardChampionshipPillar(BaseModel):
@@ -239,6 +269,12 @@ class CardPlayoffProjection(BaseModel):
     projected_ts: Decimal | None = None
     reg_ppg: Decimal | None = None
     reg_ts: Decimal | None = None
+    # Assists are historically stable reg->playoffs: projected_ast == reg_ast.
+    projected_ast: Decimal | None = None
+    reg_ast: Decimal | None = None
+    # DRtg is historically stable reg->playoffs; pass-through from advanced stats.
+    projected_drtg: Decimal | None = None
+    reg_drtg: Decimal | None = None
 
 
 class CardChampionship(BaseModel):
@@ -379,6 +415,232 @@ class CardConsistency(BaseModel):
     consistency_score: int | None = None
 
 
+class CardFrictionEfficiency(BaseModel):
+    """TS/eFG by defender proximity + a single "friction slope" summary.
+
+    Slope = wide_open_efg - very_tight_efg. Positive means efficiency
+    collapses under pressure (big drop from wide-open to contested);
+    near zero means the player shoots roughly the same regardless of
+    coverage. Built directly from PlayerDefenderDistanceShooting.
+    """
+
+    very_tight_efg: Decimal | None = None
+    tight_efg: Decimal | None = None
+    open_efg: Decimal | None = None
+    wide_open_efg: Decimal | None = None
+    friction_slope: Decimal | None = None
+    pressure_adjusted_efg: Decimal | None = None
+
+
+class CardGravityIndex(BaseModel):
+    """Approximate player gravity using defender-proximity + on/off lift.
+
+    NBA Stats does not expose teammate catch-and-shoot defender distance
+    filtered by focal-player on/off, so we proxy gravity via:
+    - tight_attention_rate: share of the player's own FGA with a defender
+      within 4 ft (very_tight + tight freq). Defenses assign tighter
+      coverage to higher-gravity players.
+    - team_off_lift: on_court_off_rating - off_court_off_rating. Team
+      offense improving when the player is on hints at gravity spillover.
+    Index is a 0-100 composite of both signals.
+    """
+
+    tight_attention_rate: Decimal | None = None
+    team_off_lift: Decimal | None = None
+    gravity_index: Decimal | None = None
+
+
+class CardShotDiet(BaseModel):
+    """Shannon entropy over the player's offensive play-type frequencies.
+
+    entropy_normalized ranges 0 (single-mode) to 1 (uniform across all
+    play types). primary_modes counts play types with >= 10% frequency;
+    top_play_type / top_freq identify the dominant mode.
+    """
+
+    entropy: Decimal | None = None
+    entropy_normalized: Decimal | None = None
+    primary_modes: int | None = None
+    top_play_type: str | None = None
+    top_play_type_freq: Decimal | None = None
+
+
+class CardRimGravity(BaseModel):
+    """How much the player bends the defense toward the rim.
+
+    Composite of paint-touch volume, drive volume, rim FG% vs. league
+    avg, and paint-touch pts/touch. Scored 0-100.
+    """
+
+    paint_touches_per_game: Decimal | None = None
+    drives_per_game: Decimal | None = None
+    rim_fg_pct: Decimal | None = None
+    rim_fg_pct_vs_league: Decimal | None = None
+    paint_pts_per_touch: Decimal | None = None
+    rim_gravity_score: Decimal | None = None
+
+
+class CardPassFunnel(BaseModel):
+    """Creation funnel: passes -> potential assists -> actual assists.
+
+    Conversion rates expose whether a high-assist player is truly
+    creating or just hub-passing. cascade_rate (secondary_ast / passes)
+    captures chain playmaking (your pass starts an action that assists
+    the next).
+    """
+
+    passes_made: Decimal | None = None
+    potential_ast: Decimal | None = None
+    ast: Decimal | None = None
+    secondary_ast: Decimal | None = None
+    pass_to_potential_pct: Decimal | None = None
+    potential_to_actual_pct: Decimal | None = None
+    pass_to_actual_pct: Decimal | None = None
+    cascade_rate: Decimal | None = None
+
+
+class CardLeverageTs(BaseModel):
+    """TS% in high-leverage games vs overall, stripping blowouts.
+
+    A game counts as "leverage" when |plus_minus| <= 15 — a rough
+    garbage-time filter applied at game granularity. Reported deltas
+    highlight players who step up (or fade) in meaningful minutes.
+    """
+
+    overall_ts_pct: Decimal | None = None
+    leverage_ts_pct: Decimal | None = None
+    blowout_ts_pct: Decimal | None = None
+    ts_leverage_delta: Decimal | None = None
+    leverage_games: int | None = None
+    blowout_games: int | None = None
+
+
+class CardPossessionDwell(BaseModel):
+    """How efficiently a player converts ball-holding time into offense.
+
+    Combines touches + time-of-possession from season totals. A low
+    dwell ratio with high pts/sec signals a quick-decision creator; a
+    high dwell with low pts/sec signals iso-heavy or hesitant usage.
+    """
+
+    avg_sec_per_touch: Decimal | None = None
+    pts_per_touch: Decimal | None = None
+    pts_per_second: Decimal | None = None
+    creation_per_second: Decimal | None = None
+    dwell_efficiency_score: Decimal | None = None
+
+
+class CardMileProduction(BaseModel):
+    """Offensive output per mile traveled on the court.
+
+    Rewards efficient movement — high-usage-but-stationary scorers
+    score low here, while guards who cover ground to set up offense
+    score higher. Also reports offensive distance share for context.
+    """
+
+    dist_miles_per_game: Decimal | None = None
+    dist_miles_off_share: Decimal | None = None
+    pts_ast_per_game: Decimal | None = None
+    production_per_mile: Decimal | None = None
+    production_per_off_mile: Decimal | None = None
+
+
+class CardLateSeasonTrend(BaseModel):
+    """Last-N games vs first-N games trend — fatigue/engagement proxy.
+
+    Not a literal Q4 vs Q1 split (NBA Stats does not expose per-quarter
+    tracking at the ingest layer). Uses GameStats game_score to compare
+    the player's play at the season's tail vs. its start. Positive
+    delta = late-season surge; negative = late-season fade.
+    """
+
+    early_games: int | None = None
+    late_games: int | None = None
+    early_game_score: Decimal | None = None
+    late_game_score: Decimal | None = None
+    trend_delta: Decimal | None = None
+    early_minutes_avg: Decimal | None = None
+    late_minutes_avg: Decimal | None = None
+
+
+class CardDefensiveTerrain(BaseModel):
+    """Weighted defensive stopping-power map across rim / mid / 3PT.
+
+    Each zone's contribution = frequency × (-pct_plusminus) — larger is
+    better because opponents shooting below their normal FG% is a win
+    for the defender. Mid-range frequency is inferred as whatever
+    overall coverage is left after rim + 3PT.
+    """
+
+    rim_freq: Decimal | None = None
+    rim_plus_minus: Decimal | None = None
+    rim_contribution: Decimal | None = None
+    mid_freq: Decimal | None = None
+    mid_plus_minus: Decimal | None = None
+    mid_contribution: Decimal | None = None
+    three_freq: Decimal | None = None
+    three_plus_minus: Decimal | None = None
+    three_contribution: Decimal | None = None
+    terrain_score: Decimal | None = None
+
+
+class CardContestConversion(BaseModel):
+    """How often a defender's contests translate to forced misses.
+
+    Contests from SeasonStats (all shots contested) paired with
+    defended FGA / FGM (shots where the player was nearest defender).
+    Scope mismatch is noted in the UI — contests include help-side
+    work, while defended FGA only counts primary-defender shots.
+    """
+
+    contests_per_game: Decimal | None = None
+    defended_fga_per_game: Decimal | None = None
+    misses_forced_per_game: Decimal | None = None
+    miss_rate: Decimal | None = None
+    contest_to_miss_score: Decimal | None = None
+
+
+class CardLineupBuoyancy(BaseModel):
+    """Floor-raiser vs. ceiling-raiser signal from a player's lineups.
+
+    Partitions all of the player's 5-man lineups by minutes-weighted
+    net rating into a worst tercile (floor) and best tercile (ceiling),
+    then reports the weighted-average NRtg of each. A high floor says
+    the player stabilizes bad combos; a dominant ceiling says they
+    amplify already-good combos. `buoyancy_type` summarizes the shape.
+    """
+
+    total_lineups: int | None = None
+    qualifying_minutes: Decimal | None = None
+    worst_tercile_net_rtg: Decimal | None = None
+    worst_tercile_minutes: Decimal | None = None
+    best_tercile_net_rtg: Decimal | None = None
+    best_tercile_minutes: Decimal | None = None
+    median_lineup_net_rtg: Decimal | None = None
+    lineup_spread: Decimal | None = None
+    floor_score: Decimal | None = None
+    ceiling_score: Decimal | None = None
+    buoyancy_type: str | None = None
+
+
+class CardSchemeRobustness(BaseModel):
+    """Scheme-collapse risk from PPP variance across the top play types.
+
+    Takes the player's top-3 play types by frequency (min 25 possessions
+    each) and computes the coefficient of variation of their PPPs.
+    Tight cluster of high PPPs = scheme-proof scorer. Wide spread = one
+    or two modes carry them; the rest collapse under a scheme change.
+    """
+
+    top_play_types: list[str] = []
+    top_play_type_ppps: list[Decimal] = []
+    ppp_mean: Decimal | None = None
+    ppp_std: Decimal | None = None
+    coefficient_of_variation: Decimal | None = None
+    collapse_risk_score: Decimal | None = None
+    robustness_score: Decimal | None = None
+
+
 class PlayerCardData(BaseModel):
     id: int
     nba_id: int
@@ -419,3 +681,16 @@ class PlayerCardData(BaseModel):
     defensive_play_types: CardDefensivePlayTypes | None = None
     recent_games: list[CardGameLog] = []
     consistency: CardConsistency | None = None
+    friction_efficiency: CardFrictionEfficiency | None = None
+    gravity_index: CardGravityIndex | None = None
+    shot_diet: CardShotDiet | None = None
+    rim_gravity: CardRimGravity | None = None
+    pass_funnel: CardPassFunnel | None = None
+    leverage_ts: CardLeverageTs | None = None
+    possession_dwell: CardPossessionDwell | None = None
+    mile_production: CardMileProduction | None = None
+    late_season_trend: CardLateSeasonTrend | None = None
+    defensive_terrain: CardDefensiveTerrain | None = None
+    contest_conversion: CardContestConversion | None = None
+    lineup_buoyancy: CardLineupBuoyancy | None = None
+    scheme_robustness: CardSchemeRobustness | None = None

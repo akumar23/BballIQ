@@ -43,7 +43,7 @@ export default function LeaderboardPage() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {players?.map((player, index) => (
-          <PlayerCard key={player.id} player={player} rank={index + 1} />
+          <PlayerCard key={player.id} player={player} rank={index + 1} season={season} />
         ))}
       </div>
     </div>

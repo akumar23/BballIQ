@@ -569,7 +569,7 @@ def main() -> int:
         description="Fetch data from nbarapm.com",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--season", default="2024-25", help="NBA season (default: 2024-25)")
+    parser.add_argument("--season", default="2025-26", help="NBA season (default: 2025-26)")
     parser.add_argument(
         "--only",
         nargs="+",

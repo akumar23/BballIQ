@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy.orm import Session
 
+from app.core.season import get_current_season
 from app.db.session import SessionLocal
 from app.models import Player
 from app.models.all_in_one_metrics import PlayerAllInOneMetrics
@@ -187,7 +188,7 @@ def fetch_and_store_all_in_one_data(
 
     # Step 1: Get player lookup
     # For historical seasons, include all players (not just active)
-    is_current_season = season == "2024-25"
+    is_current_season = season == get_current_season()
     print("\nStep 1: Building player name lookup...")
     players = get_all_players(db, active_only=is_current_season)
     name_lookup = build_name_lookup(players)
@@ -205,7 +206,7 @@ def fetch_and_store_all_in_one_data(
     # DARKO, LEBRON, and RPM only have current-season data.
     # Skip them for historical seasons to avoid storing wrong-season data.
     CURRENT_ONLY_SOURCES = {"DARKO", "LEBRON", "RPM"}
-    is_current_season = season == "2024-25"
+    is_current_season = season == get_current_season()
 
     with AllInOneMetricsScraper() as scraper:
         results = {}
@@ -286,7 +287,7 @@ Examples:
         """,
     )
     parser.add_argument(
-        "--season", default="2024-25", help="NBA season (e.g., 2024-25)"
+        "--season", default="2025-26", help="NBA season (e.g., 2025-26)"
     )
     parser.add_argument(
         "--sources",

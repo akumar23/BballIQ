@@ -109,6 +109,8 @@ export interface ApiCardDefenseOverview {
   blk_rate: string | null
   deflections_per_game: string | null
   rim_contests_per_game: string | null
+  /** 1-indexed league rank by RAPM defense among qualified players. */
+  rank: number | null
 }
 
 export interface ApiCardDefensive {
@@ -143,6 +145,8 @@ export interface ApiCardCareerSeason {
   per: string | null
   ws48: string | null
   bpm: string | null
+  /** Per-season EPM proxy (DARKO DPM for the matching year). */
+  epm: string | null
 }
 
 export interface ApiCardPlayoffProjection {
@@ -150,6 +154,10 @@ export interface ApiCardPlayoffProjection {
   projected_ts: string | null
   reg_ppg: string | null
   reg_ts: string | null
+  projected_ast: string | null
+  reg_ast: string | null
+  projected_drtg: string | null
+  reg_drtg: string | null
 }
 
 export interface ApiCardAllInOne {
@@ -203,6 +211,18 @@ export interface ApiCardSchemeScore {
   fit_score: string | null
 }
 
+export interface ApiCardTeammateDependency {
+  elite_spacing_net_rtg: string | null
+  elite_spacing_minutes: string | null
+  poor_spacing_net_rtg: string | null
+  poor_spacing_minutes: string | null
+  spacing_delta: string | null
+  with_rim_protector_net_rtg: string | null
+  with_rim_protector_minutes: string | null
+  without_rim_protector_net_rtg: string | null
+  without_rim_protector_minutes: string | null
+}
+
 export interface ApiCardPortability {
   index: string | null
   grade: string | null
@@ -216,6 +236,7 @@ export interface ApiCardPortability {
   creation_volume_score: string | null
   positions_guarded: Record<string, string | null> | null
   scheme_scores: ApiCardSchemeScore[]
+  teammate_dependency: ApiCardTeammateDependency | null
 }
 
 export interface ApiCardChampionshipPillar {
@@ -319,6 +340,19 @@ export interface PlayerCardData {
   defensive_play_types: ApiCardDefensivePlayTypes | null
   recent_games: ApiCardGameLog[]
   consistency: ApiCardConsistency | null
+  friction_efficiency: ApiCardFrictionEfficiency | null
+  gravity_index: ApiCardGravityIndex | null
+  shot_diet: ApiCardShotDiet | null
+  rim_gravity: ApiCardRimGravity | null
+  pass_funnel: ApiCardPassFunnel | null
+  leverage_ts: ApiCardLeverageTs | null
+  possession_dwell: ApiCardPossessionDwell | null
+  mile_production: ApiCardMileProduction | null
+  late_season_trend: ApiCardLateSeasonTrend | null
+  defensive_terrain: ApiCardDefensiveTerrain | null
+  contest_conversion: ApiCardContestConversion | null
+  lineup_buoyancy: ApiCardLineupBuoyancy | null
+  scheme_robustness: ApiCardSchemeRobustness | null
 }
 
 export interface ApiCardGameLog {
@@ -419,4 +453,127 @@ export interface ApiCardDefensivePlayTypes {
   post_up: ApiCardDefensivePlayType | null
   spot_up: ApiCardDefensivePlayType | null
   transition: ApiCardDefensivePlayType | null
+}
+
+export interface ApiCardFrictionEfficiency {
+  very_tight_efg: string | null
+  tight_efg: string | null
+  open_efg: string | null
+  wide_open_efg: string | null
+  friction_slope: string | null
+  pressure_adjusted_efg: string | null
+}
+
+export interface ApiCardGravityIndex {
+  tight_attention_rate: string | null
+  team_off_lift: string | null
+  gravity_index: string | null
+}
+
+export interface ApiCardShotDiet {
+  entropy: string | null
+  entropy_normalized: string | null
+  primary_modes: number | null
+  top_play_type: string | null
+  top_play_type_freq: string | null
+}
+
+export interface ApiCardRimGravity {
+  paint_touches_per_game: string | null
+  drives_per_game: string | null
+  rim_fg_pct: string | null
+  rim_fg_pct_vs_league: string | null
+  paint_pts_per_touch: string | null
+  rim_gravity_score: string | null
+}
+
+export interface ApiCardPassFunnel {
+  passes_made: string | null
+  potential_ast: string | null
+  ast: string | null
+  secondary_ast: string | null
+  pass_to_potential_pct: string | null
+  potential_to_actual_pct: string | null
+  pass_to_actual_pct: string | null
+  cascade_rate: string | null
+}
+
+export interface ApiCardLeverageTs {
+  overall_ts_pct: string | null
+  leverage_ts_pct: string | null
+  blowout_ts_pct: string | null
+  ts_leverage_delta: string | null
+  leverage_games: number | null
+  blowout_games: number | null
+}
+
+export interface ApiCardPossessionDwell {
+  avg_sec_per_touch: string | null
+  pts_per_touch: string | null
+  pts_per_second: string | null
+  creation_per_second: string | null
+  dwell_efficiency_score: string | null
+}
+
+export interface ApiCardMileProduction {
+  dist_miles_per_game: string | null
+  dist_miles_off_share: string | null
+  pts_ast_per_game: string | null
+  production_per_mile: string | null
+  production_per_off_mile: string | null
+}
+
+export interface ApiCardLateSeasonTrend {
+  early_games: number | null
+  late_games: number | null
+  early_game_score: string | null
+  late_game_score: string | null
+  trend_delta: string | null
+  early_minutes_avg: string | null
+  late_minutes_avg: string | null
+}
+
+export interface ApiCardDefensiveTerrain {
+  rim_freq: string | null
+  rim_plus_minus: string | null
+  rim_contribution: string | null
+  mid_freq: string | null
+  mid_plus_minus: string | null
+  mid_contribution: string | null
+  three_freq: string | null
+  three_plus_minus: string | null
+  three_contribution: string | null
+  terrain_score: string | null
+}
+
+export interface ApiCardContestConversion {
+  contests_per_game: string | null
+  defended_fga_per_game: string | null
+  misses_forced_per_game: string | null
+  miss_rate: string | null
+  contest_to_miss_score: string | null
+}
+
+export interface ApiCardLineupBuoyancy {
+  total_lineups: number | null
+  qualifying_minutes: string | null
+  worst_tercile_net_rtg: string | null
+  worst_tercile_minutes: string | null
+  best_tercile_net_rtg: string | null
+  best_tercile_minutes: string | null
+  median_lineup_net_rtg: string | null
+  lineup_spread: string | null
+  floor_score: string | null
+  ceiling_score: string | null
+  buoyancy_type: string | null
+}
+
+export interface ApiCardSchemeRobustness {
+  top_play_types: string[]
+  top_play_type_ppps: string[]
+  ppp_mean: string | null
+  ppp_std: string | null
+  coefficient_of_variation: string | null
+  collapse_risk_score: string | null
+  robustness_score: string | null
 }

@@ -66,7 +66,7 @@ services:
     container_name: nba-stats-frontend-dev
     working_dir: /app
     environment:
-      - VITE_API_URL=http://localhost:8000
+      - VITE_API_URL=http://backend:8000
     volumes:
       - ./frontend:/app
       - /app/node_modules

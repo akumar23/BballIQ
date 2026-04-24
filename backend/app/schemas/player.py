@@ -16,6 +16,11 @@ class PlayerMetrics(BaseModel):
     overall_metric: Decimal | None
     offensive_percentile: int | None
     defensive_percentile: int | None
+    # Present only on the composite /overall leaderboard — weighted z-score
+    # aggregate across scoring/playmaking/rebounding/defense/impact.
+    composite_score: float | None = None
+    composite_rank: int | None = None
+    category_scores: dict[str, float] | None = None
 
 
 class PlayerList(PlayerBase):

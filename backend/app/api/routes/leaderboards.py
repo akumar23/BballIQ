@@ -7,7 +7,8 @@ from app.core.season import get_current_season
 from app.db.session import get_db
 from app.models import Player, SeasonStats
 from app.schemas.leaderboard import SeasonsList
-from app.schemas.player import PlayerList, PlayerPerGameStats
+from app.schemas.player import PlayerList, PlayerMetrics, PlayerPerGameStats
+from app.services.composite_leaderboard import compute_composite_rankings
 
 router = APIRouter()
 
@@ -130,19 +131,33 @@ async def get_overall_leaderboard(
     limit: int = Query(default=50, le=100),
     db: Session = Depends(get_db),
 ):
-    """Get players ranked by overall (combined) metric."""
-    season = season or get_current_season()
-    results = (
-        db.query(Player, SeasonStats)
-        .join(SeasonStats, Player.id == SeasonStats.player_id)
-        .filter(SeasonStats.season == season)
-        .filter(SeasonStats.overall_metric.isnot(None))
-        .order_by(desc(SeasonStats.overall_metric))
-        .limit(limit)
-        .all()
-    )
+    """Get players ranked by composite (weighted z-score across 5 categories).
 
-    return [_build_player_list(player, stats) for player, stats in results]
+    Categories: scoring, playmaking, rebounding, defense, impact. See
+    ``app.services.composite_leaderboard`` for weights and stat definitions.
+    """
+    season = season or get_current_season()
+    ranked = compute_composite_rankings(db, season, limit=limit)
+    return [
+        PlayerList(
+            id=r.player.id,
+            nba_id=r.player.nba_id,
+            name=r.player.name,
+            position=r.player.position,
+            team_abbreviation=r.player.team_abbreviation,
+            metrics=PlayerMetrics(
+                offensive_metric=r.season_stats.offensive_metric,
+                defensive_metric=r.season_stats.defensive_metric,
+                overall_metric=r.season_stats.overall_metric,
+                offensive_percentile=r.season_stats.offensive_percentile,
+                defensive_percentile=r.season_stats.defensive_percentile,
+                composite_score=round(r.composite_score, 3),
+                composite_rank=r.rank,
+                category_scores={k: round(v, 3) for k, v in r.category_scores.items()},
+            ),
+        )
+        for r in ranked
+    ]
 
 @router.get("/seasons", response_model=list[SeasonsList])
 @cache(expire=_LEADERBOARD_TTL)

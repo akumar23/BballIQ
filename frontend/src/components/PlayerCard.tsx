@@ -6,12 +6,17 @@ import MetricGauge from './MetricGauge'
 interface PlayerCardProps {
   player: Player
   rank?: number
+  season?: string
 }
 
-export default function PlayerCard({ player, rank }: PlayerCardProps) {
+export default function PlayerCard({ player, rank, season }: PlayerCardProps) {
+  const to = season
+    ? `/player-card?playerId=${player.id}&season=${encodeURIComponent(season)}`
+    : `/player-card?playerId=${player.id}`
+  const composite = player.metrics?.composite_score
   return (
     <Link
-      to={`/players/${player.id}`}
+      to={to}
       className="block bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow"
     >
       <div className="flex items-start gap-4">
@@ -28,6 +33,14 @@ export default function PlayerCard({ player, rank }: PlayerCardProps) {
                 {player.position} • {player.team_abbreviation}
               </p>
             </div>
+            {composite != null && (
+              <span
+                className="text-xs font-mono font-semibold text-primary-600 bg-primary-50 rounded px-2 py-0.5"
+                title="Weighted z-score composite across scoring, playmaking, rebounding, defense, impact"
+              >
+                {composite > 0 ? '+' : ''}{composite.toFixed(2)}
+              </span>
+            )}
           </div>
           {player.metrics && (
             <div className="mt-3 grid grid-cols-2 gap-4">
