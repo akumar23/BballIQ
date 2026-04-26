@@ -26,12 +26,12 @@ const SORT_OPTIONS: { key: PlayTypeSortBy; label: string }[] = [
 
 function formatPPP(value: number | null): string {
   if (value === null) return '—'
-  return value.toFixed(2)
+  return Number(value).toFixed(2)
 }
 
 function formatPercent(value: number | null): string {
   if (value === null) return '—'
-  return `${(value * 100).toFixed(1)}%`
+  return `${(Number(value) * 100).toFixed(1)}%`
 }
 
 function PPPBadge({ ppp, percentile }: { ppp: number | null; percentile: number | null }) {
@@ -103,15 +103,15 @@ export default function PlayTypesPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Play Types</h1>
-        <p className="text-gray-600 mt-1">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Play Types</h1>
+        <p className="text-gray-600 mt-1 dark:text-white">
           Offensive play type efficiency for the {season} season (min. 50 possessions)
         </p>
       </div>
 
       {/* Play Type Tabs */}
       <div className="mb-4">
-        <div className="text-sm font-medium text-gray-500 mb-2">Play Type</div>
+        <div className="text-sm font-medium text-gray-500 mb-2 dark:text-white">Play Type</div>
         <div className="flex flex-wrap gap-2">
           {PLAY_TYPE_TABS.map(tab => (
             <button
@@ -132,7 +132,7 @@ export default function PlayTypesPage() {
 
       {/* Sort Options */}
       <div className="mb-6">
-        <div className="text-sm font-medium text-gray-500 mb-2">Sort By</div>
+        <div className="text-sm font-medium text-gray-500 mb-2 dark:text-white">Sort By</div>
         <div className="flex gap-2">
           {SORT_OPTIONS.map(option => (
             <button
@@ -166,7 +166,7 @@ export default function PlayTypesPage() {
 
       {data && data.entries.length > 0 && (
         <div className="overflow-x-auto">
-          <div className="mb-4 text-sm text-gray-600">
+          <div className="mb-4 text-sm text-gray-600 dark:text-white">
             Showing <span className="font-medium">{PLAY_TYPE_LABELS[activePlayType]}</span> leaders
             sorted by <span className="font-medium">{SORT_BY_LABELS[sortBy]}</span>
           </div>

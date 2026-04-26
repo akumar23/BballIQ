@@ -6,9 +6,9 @@ interface SectionHeaderProps {
 export function SectionHeader({ title, tag }: SectionHeaderProps) {
   return (
     <div className="flex items-center gap-3 mb-4 mt-8 first:mt-0">
-      <h3 className="text-sm uppercase tracking-[1.5px] text-gray-900 font-semibold">{title}</h3>
+      <h3 className="text-sm uppercase tracking-[1.5px] text-gray-900 dark:text-white font-semibold">{title}</h3>
       {tag && <TagBadge text={tag} />}
-      <div className="flex-1 h-px bg-gray-200" />
+      <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
     </div>
   )
 }

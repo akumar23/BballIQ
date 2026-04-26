@@ -19,7 +19,7 @@ export default function LeaderboardPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Leaderboard</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-6 dark:text-white">Leaderboard</h1>
 
       <div className="flex gap-2 mb-6">
         {tabs.map(tab => (

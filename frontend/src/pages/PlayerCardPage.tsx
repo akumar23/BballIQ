@@ -163,7 +163,7 @@ export default function PlayerCardPage() {
           ))}
         </select>
         {options.length > 0 && (
-          <p className="mt-1 text-xs text-gray-400 font-mono">{options.length} player seasons available</p>
+          <p className="mt-1 text-xs text-gray-400 font-mono dark:text-white">{options.length} player seasons available</p>
         )}
         {optionsError && (
           <p className="mt-1 text-xs text-red-500 font-mono">
@@ -199,8 +199,8 @@ export default function PlayerCardPage() {
               </span>
             </div>
             <div className="flex-1">
-              <h2 className="text-3xl font-bold text-gray-900">{cardData.name}</h2>
-              <p className="text-gray-500 text-sm">
+              <h2 className="text-3xl font-bold text-gray-900 dark:text-white">{cardData.name}</h2>
+              <p className="text-gray-500 text-sm dark:text-white">
                 {cardData.team} · {cardData.position}
                 {cardData.age ? ` · ${Math.floor(cardData.age)} yrs` : ''}
                 {' '}·{' '}
@@ -248,7 +248,7 @@ export default function PlayerCardPage() {
                 className={`px-4 py-2.5 text-xs uppercase tracking-[1.5px] transition-all rounded-t ${
                   activeTab === tab
                     ? 'bg-primary-600 text-white'
-                    : 'text-gray-500 hover:text-gray-900'
+                    : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
                 }`}
               >
                 {tab}

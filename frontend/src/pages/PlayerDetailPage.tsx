@@ -21,7 +21,7 @@ export default function PlayerDetailPage() {
         <div className="flex justify-between items-start mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">{player.name}</h1>
-            <p className="text-gray-500">
+            <p className="text-gray-500 dark:text-white">
               {player.position} • {player.team_abbreviation} • {player.season}
             </p>
             {player.games_played && (

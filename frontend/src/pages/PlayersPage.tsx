@@ -23,7 +23,7 @@ export default function PlayersPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">Players</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-4 dark:text-white">Players</h1>
         <input
           type="text"
           placeholder="Search players..."

@@ -29,9 +29,13 @@ build/
 /data/
 *.db
 
+# Celery
+celerybeat-schedule
+
 # Logs
 *.log
 
 # OS
 .DS_Store
 Thumbs.db
+.claude/settings.local.json

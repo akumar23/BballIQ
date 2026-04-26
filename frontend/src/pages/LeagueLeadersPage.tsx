@@ -1,17 +1,19 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { usePerGameLeaderboard, useLeaderboardSeasons } from '@/hooks/usePlayers'
+import { useSeason } from '@/context/SeasonContext'
 import { cn } from '@/lib/utils'
 import type { PlayerPerGameStats } from '@/types'
-type StatKey = 'ppg' | 'rpg' | 'apg' | 'mpg' | 'spg' | 'bpg'
+type StatKey = 'games_played' | 'ppg' | 'rpg' | 'apg' | 'mpg' | 'spg' | 'bpg'
 
-const TABS: { key: StatKey; label: string }[] = [
-  { key: 'ppg', label: 'Points' },
-  { key: 'rpg', label: 'Rebounds' },
-  { key: 'apg', label: 'Assists' },
-  { key: 'mpg', label: 'Minutes' },
-  { key: 'spg', label: 'Steals' },
-  { key: 'bpg', label: 'Blocks' },
+const TABS: { key: StatKey; label: string; header: string }[] = [
+  { key: 'games_played', label: 'Games Played', header: 'GP' },
+  { key: 'ppg', label: 'Points', header: 'PPG' },
+  { key: 'rpg', label: 'Rebounds', header: 'RPG' },
+  { key: 'apg', label: 'Assists', header: 'APG' },
+  { key: 'mpg', label: 'Minutes', header: 'MPG' },
+  { key: 'spg', label: 'Steals', header: 'SPG' },
+  { key: 'bpg', label: 'Blocks', header: 'BPG' },
 ]
 
 function StatCell({ value, highlight }: { value: number | null; highlight: boolean }) {
@@ -40,9 +42,7 @@ function PlayerRow({ player, rank, statKey }: { player: PlayerPerGameStats; rank
           </div>
         </Link>
       </td>
-      <td className="px-4 py-3 text-center">
-        <span className="text-sm text-gray-600">{player.games_played ?? '—'}</span>
-      </td>
+      <StatCell value={player.games_played} highlight={statKey === 'games_played'} />
       <StatCell value={player.ppg} highlight={statKey === 'ppg'} />
       <StatCell value={player.rpg} highlight={statKey === 'rpg'} />
       <StatCell value={player.apg} highlight={statKey === 'apg'} />
@@ -55,17 +55,22 @@ function PlayerRow({ player, rank, statKey }: { player: PlayerPerGameStats; rank
 
 export default function LeagueLeadersPage() {
   const [activeTab, setActiveTab] = useState<StatKey>('ppg')
-  const [selectedSeason, setSelectedSeason] = useState<string>('2025-26')
+  const { season: globalSeason } = useSeason()
+  const [selectedSeason, setSelectedSeason] = useState<string>(globalSeason)
   const { data: seasons } = useLeaderboardSeasons()
+
+  useEffect(() => {
+    setSelectedSeason(globalSeason)
+  }, [globalSeason])
   const { data: players, isLoading, error } = usePerGameLeaderboard(activeTab, selectedSeason, 50)
 
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">League Leaders</h1>
-        <p className="text-gray-600 mt-1">Per game stats for the {selectedSeason} season</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">League Leaders</h1>
+        <p className="text-gray-600 mt-1 dark:text-white">Per game stats for the {selectedSeason} season</p>
       </div>
-
+ 
       <div className="flex gap-2 mb-6">
         <select
           value={selectedSeason}
@@ -112,13 +117,12 @@ export default function LeagueLeadersPage() {
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Rank</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">Player</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">GP</th>
                 {TABS.map(tab => (
                   <th key={tab.key} className={cn(
                     'px-4 py-3 text-center text-xs font-medium uppercase tracking-wider',
                     activeTab === tab.key ? 'text-primary-600' : 'text-gray-500'
                   )}>
-                    {tab.key.toUpperCase()}
+                    {tab.header}
                   </th>
                 ))}
               </tr>
