@@ -18,7 +18,7 @@ Design notes:
 from __future__ import annotations
 
 import statistics
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -28,7 +28,7 @@ from app.models import Player, PlayerAdvancedStats, PlayerComputedAdvanced, Seas
 
 # Stat accessor signature: (season_stats, advanced, computed) -> float | None.
 # Keeps the category config declarative and composable.
-StatExtractor = callable  # type: ignore[assignment]
+StatExtractor = Callable[[SeasonStats | None, PlayerAdvancedStats | None, PlayerComputedAdvanced | None], float | None]
 
 
 @dataclass(frozen=True)
