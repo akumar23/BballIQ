@@ -11,10 +11,22 @@ export default function Layout({ children }: LayoutProps) {
   const { season, setSeason, availableSeasons } = useSeason()
   const [dark, setDark] = useState(() => localStorage.getItem('theme') === 'dark')
 
+  // Apply saved theme on mount with no transition
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
-    localStorage.setItem('theme', dark ? 'dark' : 'light')
-  }, [dark])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const toggleDark = () => {
+    const next = !dark
+    setDark(next)
+    localStorage.setItem('theme', next ? 'dark' : 'light')
+    document.documentElement.classList.add('theme-transitioning')
+    requestAnimationFrame(() => {
+      document.documentElement.classList.toggle('dark', next)
+      window.setTimeout(() => document.documentElement.classList.remove('theme-transitioning'), 100)
+    })
+  }
 
   return (
     <div className="min-h-screen">
@@ -25,22 +37,22 @@ export default function Layout({ children }: LayoutProps) {
               CourtVision
             </Link>
             <div className="flex items-center gap-6">
-              <Link to="/leaderboard" className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+              <Link to="/leaderboard" className="text-gray-600 hover:text-gray-900 dark:text-white dark:hover:text-white">
                 Leaderboard
               </Link>
-              <Link to="/impact" className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+              <Link to="/impact" className="text-gray-600 hover:text-gray-900 dark:text-white dark:hover:text-white">
                 Impact
               </Link>
-              <Link to="/play-types" className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+              <Link to="/play-types" className="text-gray-600 hover:text-gray-900 dark:text-white dark:hover:text-white">
                 Play Types
               </Link>
-              <Link to="/players" className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+              <Link to="/players" className="text-gray-600 hover:text-gray-900 dark:text-white dark:hover:text-white">
                 Players
               </Link>
-              <Link to="/league-leaders" className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+              <Link to="/league-leaders" className="text-gray-600 hover:text-gray-900 dark:text-white dark:hover:text-white">
                 League Leaders
               </Link>
-              <Link to="/player-card" className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+              <Link to="/player-card" className="text-gray-600 hover:text-gray-900 dark:text-white dark:hover:text-white">
                 Player Card
               </Link>
               {availableSeasons.length > 0 && (
@@ -55,7 +67,7 @@ export default function Layout({ children }: LayoutProps) {
                 </select>
               )}
               <button
-                onClick={() => setDark(d => !d)}
+                onClick={toggleDark}
                 className="px-3 py-1.5 rounded-md text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
               >
                 {dark ? 'Light' : 'Dark'}

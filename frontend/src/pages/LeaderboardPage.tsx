@@ -29,7 +29,7 @@ export default function LeaderboardPage() {
             className={cn(
               'px-4 py-2 rounded-lg font-medium transition-colors',
               type === tab.key
-                ? 'bg-primary-600 text-white'
+                ? 'bg-primary-600 text-white dark:bg-gray-800'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             )}
           >

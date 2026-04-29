@@ -74,7 +74,7 @@ function StatBox({ label, value, decimal = false }: { label: string; value: numb
     <div className="bg-gray-50 rounded-lg p-3">
       <p className="text-xs text-gray-500">{label}</p>
       <p className="text-xl font-semibold text-gray-900">
-        {value === null ? '-' : decimal ? value.toFixed(3) : value}
+        {value === null ? '-' : decimal ? Number(value).toFixed(3) : value}
       </p>
     </div>
   )

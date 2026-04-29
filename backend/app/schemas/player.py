@@ -32,8 +32,8 @@ class PlayerList(PlayerBase):
 
 class PlayerTrackingStats(BaseModel):
     touches: int | None
-    points_per_touch: Decimal | None
-    time_of_possession: Decimal | None
+    points_per_touch: float | None
+    time_of_possession: float | None
     deflections: int | None
     contested_shots: int | None
 

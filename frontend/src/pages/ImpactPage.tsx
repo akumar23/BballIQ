@@ -161,8 +161,8 @@ export default function ImpactPage() {
             className={cn(
               'px-4 py-2 rounded-lg font-medium transition-colors',
               sortBy === tab.key
-                ? 'bg-primary-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ? 'bg-primary-600 text-white dark:bg-gray-800'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:text-gray-900'
             )}
             title={tab.description}
           >

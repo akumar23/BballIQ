@@ -19,7 +19,7 @@ const TABS: { key: StatKey; label: string; header: string }[] = [
 function StatCell({ value, highlight }: { value: number | null; highlight: boolean }) {
   return (
     <td className="px-4 py-3 text-center">
-      <span className={cn('text-sm', highlight ? 'text-lg font-bold text-yellow-500' : 'text-gray-600')}>
+      <span className={cn('text-sm', highlight ? 'text-lg font-bold text-yellow-500' : 'text-gray-600 dark:text-gray-300')}>
         {value ?? '—'}
       </span>
     </td>
@@ -28,16 +28,16 @@ function StatCell({ value, highlight }: { value: number | null; highlight: boole
 
 function PlayerRow({ player, rank, statKey }: { player: PlayerPerGameStats; rank: number; statKey: StatKey }) {
   return (
-    <tr className="hover:bg-gray-50 transition-colors">
+    <tr className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
       <td className="px-4 py-3 whitespace-nowrap">
-        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-gray-600 text-sm font-medium">
+        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-sm font-medium">
           {rank}
         </span>
       </td>
       <td className="px-4 py-3">
         <Link to={`/players/${player.id}`} className="hover:text-primary-600">
-          <div className="font-medium text-gray-900">{player.name}</div>
-          <div className="text-sm text-gray-500">
+          <div className="font-medium text-gray-900 dark:text-white">{player.name}</div>
+          <div className="text-sm text-gray-500 dark:text-gray-400">
             {player.position} • {player.team_abbreviation}
           </div>
         </Link>
@@ -75,7 +75,7 @@ export default function LeagueLeadersPage() {
         <select
           value={selectedSeason}
           onChange={e => setSelectedSeason(e.target.value)}
-          className="px-3 py-2 rounded-lg bg-gray-100 text-gray-600 font-medium"
+          className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-200 font-medium"
         >
           {seasons?.map(s => (
             <option key={s.season} value={s.season}>{s.season}</option>
@@ -88,7 +88,7 @@ export default function LeagueLeadersPage() {
             className={cn(
               'px-4 py-2 rounded-lg font-medium transition-colors',
               activeTab === tab.key
-                ? 'bg-primary-600 text-white'
+                ? 'bg-primary-600 text-white dark:bg-gray-800'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             )}
           >
@@ -112,22 +112,22 @@ export default function LeagueLeadersPage() {
 
       {players && players.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 table-fixed">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 table-fixed">
+            <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Rank</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">Player</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-16">Rank</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-48">Player</th>
                 {TABS.map(tab => (
                   <th key={tab.key} className={cn(
                     'px-4 py-3 text-center text-xs font-medium uppercase tracking-wider',
-                    activeTab === tab.key ? 'text-primary-600' : 'text-gray-500'
+                    activeTab === tab.key ? 'text-primary-600' : 'text-gray-500 dark:text-gray-400'
                   )}>
                     {tab.header}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
               {players.map((player, index) => (
                 <PlayerRow key={player.id} player={player} rank={index + 1} statKey={activeTab} />
               ))}
