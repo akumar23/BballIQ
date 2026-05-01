@@ -28,7 +28,7 @@ from app.models import Player, PlayerAdvancedStats, PlayerComputedAdvanced, Seas
 
 # Stat accessor signature: (season_stats, advanced, computed) -> float | None.
 # Keeps the category config declarative and composable.
-StatExtractor = Callable[[SeasonStats | None, PlayerAdvancedStats | None, PlayerComputedAdvanced | None], float | None]
+StatExtractor = Callable[[SeasonStats, PlayerAdvancedStats | None, PlayerComputedAdvanced | None], float | None]
 
 
 @dataclass(frozen=True)
