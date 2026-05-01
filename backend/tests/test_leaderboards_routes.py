@@ -167,17 +167,37 @@ class TestDefensiveLeaderboard:
 
 
 class TestOverallLeaderboard:
-    def test_orders_by_overall_metric_desc(
+    def test_orders_by_composite_score_desc(
         self,
         seeded_session: Callable[..., Session],
         make_client: Callable[[], TestClient],
     ) -> None:
+        """The /overall endpoint ranks by composite z-score, not the legacy
+        ``overall_metric`` column. The contract this test pins:
+
+            * status 200 with one row per eligible player,
+            * ``metrics.composite_score`` populated and monotonically
+              decreasing across the response,
+            * ``metrics.composite_rank`` is a contiguous 1..N enumeration.
+
+        See :mod:`app.services.composite_leaderboard` for the formula. We
+        intentionally avoid asserting a specific ID ordering so weight
+        tweaks in the service don't cascade into route-test churn.
+        """
         seeded_session(_seed_leaderboard_rows).close()
         client = make_client()
         resp = client.get("/api/leaderboards/overall")
         assert resp.status_code == 200
-        # Overall: Bravo(83) > Alpha(81) > Charlie(78)
-        assert [row["id"] for row in resp.json()] == [2, 1, 3]
+        body = resp.json()
+        assert len(body) == 3
+        assert {row["id"] for row in body} == {1, 2, 3}
+
+        scores = [row["metrics"]["composite_score"] for row in body]
+        assert all(s is not None for s in scores)
+        assert scores == sorted(scores, reverse=True)
+
+        ranks = [row["metrics"]["composite_rank"] for row in body]
+        assert ranks == [1, 2, 3]
 
 
 class TestSeasonOverride:
