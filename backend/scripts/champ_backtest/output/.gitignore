@@ -1,0 +1,3 @@
+# Validation outputs are derived artifacts; regenerate via `cli.py validate`.
+*
+!.gitignore

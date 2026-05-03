@@ -250,6 +250,7 @@ export interface ApiCardChampionship {
   tier: string | null
   win_probability: string | null
   multiplier_vs_base: string | null
+  path_viability: string | null
   pillars: ApiCardChampionshipPillar[]
   playoff_projection: ApiCardPlayoffProjection | null
 }

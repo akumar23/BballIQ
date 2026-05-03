@@ -43,6 +43,13 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.8.0",
     "types-requests>=2.31.0",
+    # Used by scripts/champ_backtest historical-validation harness:
+    # logistic-regression weight refit, calibration curve fit, plotting,
+    # and parquet persistence of cached scrape results.
+    "scikit-learn>=1.3",
+    "scipy>=1.11",
+    "matplotlib>=3.8",
+    "pyarrow>=15",
 ]
 
 [build-system]

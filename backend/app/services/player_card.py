@@ -98,7 +98,10 @@ from app.schemas.player_card import (
     CardWithoutTeammate,
     PlayerCardData,
 )
-from app.services.championship import ChampionshipCalculator
+from app.services.championship import (
+    ChampionshipCalculator,
+    compute_playoff_ts_drop,
+)
 from app.services.luck_adjusted import LuckAdjustedCalculator
 from app.services.metrics_utils import safe_float, to_decimal
 from app.services.opponent_tier import TIER_WEIGHTS, OpponentTierCalculator
@@ -315,6 +318,7 @@ class PlayerCardService:
             career_rows,
             portability_score,
             gp,
+            shot_zones,
         )
         card_luck = self._compute_luck_adjusted(
             on_off, season_stat, clutch_stats, advanced, player
@@ -1070,6 +1074,7 @@ class PlayerCardService:
         career_rows,
         portability_score: float,
         gp: int,
+        shot_zones: list[PlayerShotZones] | None = None,
     ) -> CardChampionship | None:
         if not (season_stat and advanced):
             return None
@@ -1084,13 +1089,14 @@ class PlayerCardService:
             all_in_one=all_in_one_row,
             career_stats=career_rows,
             portability_score=portability_score,
+            shot_zones=shot_zones,
         )
         champ_result = champ_calc.calculate()
 
         reg_ppg = safe_float(season_stat.total_points) / max(1, gp)
         reg_ts = safe_float(advanced.ts_pct) if advanced else 0.55
         usg = safe_float(advanced.usg_pct, 0.20) if advanced else 0.20
-        ts_drop = 0.010 if usg >= 0.28 else (0.018 if usg >= 0.22 else 0.028)
+        ts_drop = compute_playoff_ts_drop(advanced, play_types, shot_zones)
         proj_ts = reg_ts - ts_drop
         proj_ppg = (
             reg_ppg
@@ -1122,16 +1128,17 @@ class PlayerCardService:
             tier=champ_result.tier,
             win_probability=to_decimal(champ_result.win_probability, "0.0001"),
             multiplier_vs_base=to_decimal(champ_result.multiplier_vs_base),
+            path_viability=to_decimal(champ_result.path_viability, "0.001"),
             pillars=[
                 CardChampionshipPillar(
                     name="Playoff Scoring",
                     score=to_decimal(champ_result.playoff_scoring),
-                    weight=to_decimal(0.25),
+                    weight=to_decimal(0.27),
                 ),
                 CardChampionshipPillar(
                     name="Two-Way Impact",
                     score=to_decimal(champ_result.two_way_impact),
-                    weight=to_decimal(0.20),
+                    weight=to_decimal(0.23),
                 ),
                 CardChampionshipPillar(
                     name="Clutch Performance",
@@ -1152,11 +1159,6 @@ class PlayerCardService:
                     name="Experience & Arc",
                     score=to_decimal(champ_result.experience_arc),
                     weight=to_decimal(0.10),
-                ),
-                CardChampionshipPillar(
-                    name="Supporting Cast",
-                    score=to_decimal(champ_result.supporting_cast),
-                    weight=to_decimal(0.05),
                 ),
             ],
             playoff_projection=playoff_proj,

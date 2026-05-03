@@ -282,6 +282,7 @@ class CardChampionship(BaseModel):
     tier: str | None = None
     win_probability: Decimal | None = None
     multiplier_vs_base: Decimal | None = None
+    path_viability: Decimal | None = None
     pillars: list[CardChampionshipPillar] = []
     playoff_projection: CardPlayoffProjection | None = None
 

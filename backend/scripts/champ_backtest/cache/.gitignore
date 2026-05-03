@@ -1,0 +1,4 @@
+# Cached scrape outputs are reproducible from data_collection.py;
+# do not commit them.
+*
+!.gitignore
