@@ -13,7 +13,10 @@ import PortabilityTab from '@/components/cortex/PortabilityTab'
 import ChampionshipTab from '@/components/cortex/ChampionshipTab'
 import TrajectoryTab from '@/components/cortex/TrajectoryTab'
 import GameLogsTab from '@/components/cortex/GameLogsTab'
-import Combobox, { type ComboboxOption } from '@/components/ui/Combobox'
+import Combobox, {
+  type ComboboxHandle,
+  type ComboboxOption,
+} from '@/components/ui/Combobox'
 import Stat from '@/components/ui/Stat'
 import type { PlayerCardOption } from '@/types'
 
@@ -59,9 +62,13 @@ export default function PlayerCardPage() {
   // in over 150ms without re-mounting on every data change.
   const [fadeKey, setFadeKey] = useState(0)
   const [headshotFailed, setHeadshotFailed] = useState(false)
+  const [optionHeadshotFails, setOptionHeadshotFails] = useState<Record<number, true>>({})
 
   const tabIdBase = useId()
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  // Imperative handle to the player picker — used for the Cmd/Ctrl+K shortcut
+  // so the picker can be summoned from anywhere on the Player Card page.
+  const pickerRef = useRef<ComboboxHandle>(null)
 
   // Load all available player+season options on mount.
   const {
@@ -141,21 +148,48 @@ export default function PlayerCardPage() {
     setFadeKey((k) => k + 1)
   }, [activeTab])
 
-  // Build combobox options once per options/PlayerCardOption[] change.
+  // Build combobox options. The label is the player name only (the matcher
+  // searches both `label` and `hint`), so typing a name prefix matches first
+  // and team/season tokens fall through to the secondary `hint` field. We
+  // store the full payload on `data` so the option renderer can show the
+  // headshot, monogram, team chip, and season chip.
   const comboboxOptions = useMemo<ComboboxOption<PlayerCardOption>[]>(
     () =>
       options.map((opt) => {
         const team = opt.team_abbreviation ?? ''
-        const teamSegment = team ? `${team} ` : ''
         return {
           value: encodeOption(opt.id, opt.season),
-          label: `${opt.name} — ${teamSegment}(${opt.season})`,
-          hint: opt.position ?? undefined,
+          label: opt.name,
+          hint: [team, opt.season, opt.position ?? ''].filter(Boolean).join(' '),
           data: opt,
         }
       }),
     [options],
   )
+
+  // Cmd/Ctrl+K opens the player picker. Scoped to the Player Card page only —
+  // the global command palette can come later. The listener short-circuits
+  // when focus is already inside an editable element so we don't fight native
+  // shortcuts in a future search box.
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        const target = e.target as HTMLElement | null
+        const isEditable =
+          target?.tagName === 'INPUT' ||
+          target?.tagName === 'TEXTAREA' ||
+          target?.isContentEditable === true
+        // Skip when focus is in a non-picker editable surface so we never
+        // hijack a future inline search box. The picker is opened via its
+        // imperative handle, so it doesn't need an early-out for itself.
+        if (isEditable) return
+        e.preventDefault()
+        pickerRef.current?.open()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   // Tab-strip keyboard handling: ArrowLeft/ArrowRight wrap, Home/End jump.
   const handleTabKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -203,25 +237,145 @@ export default function PlayerCardPage() {
       {/* Player + Season Selector */}
       <div className="mb-6">
         <Combobox<PlayerCardOption>
+          ref={pickerRef}
           options={comboboxOptions}
           value={selectedValue}
           onChange={(v) => setSelectedValue(v)}
           ariaLabel="Select a player and season"
-          placeholder={
+          searchPlaceholder={
             optionsLoading
               ? 'Loading players…'
               : optionsError
                 ? 'Unable to load players'
-                : 'Search players…'
+                : 'Search by name, team, or season…'
+          }
+          triggerPlaceholder={
+            optionsLoading
+              ? 'Loading players…'
+              : optionsError
+                ? 'Unable to load players'
+                : 'Choose a player'
           }
           disabled={comboboxOptions.length === 0}
-          className="max-w-md"
+          className="max-w-xl"
           description={
-            comboboxOptions.length > 0
-              ? `${comboboxOptions.length} player seasons available`
-              : undefined
+            comboboxOptions.length > 0 ? (
+              <span className="inline-flex items-center gap-2">
+                <span>{comboboxOptions.length} player seasons available</span>
+                <span className="hidden sm:inline-flex items-center gap-1 text-text-muted">
+                  ·
+                  <kbd className="px-1.5 py-0.5 rounded border border-border-subtle bg-surface-3 text-[10px] uppercase tracking-wider font-mono">
+                    {navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl'} K
+                  </kbd>
+                  to search
+                </span>
+              </span>
+            ) : undefined
           }
-          emptyMessage="No matching players"
+          emptyMessage={(q) =>
+            q ? (
+              <>
+                No players found for{' '}
+                <span className="text-text-primary">"{q}"</span>
+              </>
+            ) : (
+              'No players available'
+            )
+          }
+          renderTrigger={(selected) => {
+            const data = selected?.data
+            if (!data) {
+              return (
+                <span className="flex items-center gap-3 px-1 py-1.5">
+                  <span
+                    aria-hidden="true"
+                    className="w-10 h-10 rounded-full bg-surface-3 border border-border-subtle"
+                  />
+                  <span className="text-sm text-text-muted font-mono">Choose a player</span>
+                </span>
+              )
+            }
+            const failed = optionHeadshotFails[data.id]
+            return (
+              <span className="flex items-center gap-3 px-1 py-1">
+                {!failed ? (
+                  <img
+                    src={`https://cdn.nba.com/headshots/nba/latest/1040x760/${data.id}.png`}
+                    alt=""
+                    loading="lazy"
+                    onError={() =>
+                      setOptionHeadshotFails((prev) => ({ ...prev, [data.id]: true }))
+                    }
+                    className="w-10 h-10 rounded-full object-cover bg-primary-50 dark:bg-primary-500/10 border border-border-subtle"
+                  />
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="w-10 h-10 rounded-full bg-primary-500/10 dark:bg-primary-500/20 border border-primary-500/30 flex items-center justify-center"
+                  >
+                    <span className="text-primary-700 dark:text-primary-300 font-mono font-bold text-xs">
+                      {getMonogram(data.name)}
+                    </span>
+                  </span>
+                )}
+                <span className="flex-1 min-w-0 flex flex-col items-start">
+                  <span className="truncate text-sm font-semibold text-text-primary">
+                    {data.name}
+                  </span>
+                  <span className="truncate text-xs text-text-secondary font-mono tabular-nums">
+                    {[data.team_abbreviation, data.position, data.season]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                </span>
+              </span>
+            )
+          }}
+          renderOption={(opt, { isSelected }) => {
+            const data = opt.data
+            const failed = optionHeadshotFails[data.id]
+            return (
+              <span className="flex flex-1 items-center gap-3 min-w-0">
+                {!failed ? (
+                  <img
+                    src={`https://cdn.nba.com/headshots/nba/latest/1040x760/${data.id}.png`}
+                    alt=""
+                    loading="lazy"
+                    onError={() =>
+                      setOptionHeadshotFails((prev) => ({ ...prev, [data.id]: true }))
+                    }
+                    className="w-8 h-8 rounded-full object-cover bg-primary-50 dark:bg-primary-500/10 border border-border-subtle shrink-0"
+                  />
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="w-8 h-8 rounded-full bg-primary-500/10 dark:bg-primary-500/20 border border-primary-500/30 flex items-center justify-center shrink-0"
+                  >
+                    <span className="text-primary-700 dark:text-primary-300 font-mono font-bold text-[10px]">
+                      {getMonogram(data.name)}
+                    </span>
+                  </span>
+                )}
+                <span className="flex-1 min-w-0 flex flex-col">
+                  <span
+                    className={`truncate text-sm ${
+                      isSelected
+                        ? 'font-semibold text-primary-700 dark:text-primary-300'
+                        : 'text-text-primary'
+                    }`}
+                  >
+                    {data.name}
+                  </span>
+                  <span className="truncate text-xs text-text-muted font-mono tabular-nums">
+                    {[data.team_abbreviation, data.position].filter(Boolean).join(' · ')}
+                  </span>
+                </span>
+                <span className="shrink-0 text-xs text-text-muted font-mono tabular-nums">
+                  {data.season}
+                </span>
+              </span>
+            )
+          }}
         />
         {optionsError && (
           <p
