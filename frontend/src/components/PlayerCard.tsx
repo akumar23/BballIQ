@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import type { Player } from '@/types'
-import { formatMetric, getPercentileColor } from '@/lib/utils'
+import Card from '@/components/ui/Card'
 import MetricGauge from './MetricGauge'
 
 interface PlayerCardProps {
@@ -15,30 +15,31 @@ export default function PlayerCard({ player, rank, season }: PlayerCardProps) {
     : `/player-card?playerId=${player.id}`
   const composite = player.metrics?.composite_score
   return (
-    <Link
+    <Card
+      as={Link}
       to={to}
-      className="block bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow"
+      variant="inset"
+      className="block hover:bg-surface-2 hover:border-border-default transition-colors"
     >
       <div className="flex items-start gap-4">
         {rank && (
-          <span className="text-2xl font-bold text-gray-300 w-8">
-            {rank}
-          </span>
+          <span className="text-h2 font-bold text-text-muted w-8">{rank}</span>
         )}
         <div className="flex-1">
           <div className="flex justify-between items-start">
             <div>
-              <h3 className="font-semibold text-gray-900">{player.name}</h3>
-              <p className="text-sm text-gray-500">
+              <h3 className="font-semibold text-text-primary">{player.name}</h3>
+              <p className="text-caption text-text-muted">
                 {player.position} • {player.team_abbreviation}
               </p>
             </div>
             {composite != null && (
               <span
-                className="text-xs font-mono font-semibold text-primary-600 bg-primary-50 rounded px-2 py-0.5"
+                className="text-caption font-mono tabular-nums font-semibold text-primary-600 dark:text-primary-400 bg-primary-500/10 rounded px-2 py-0.5"
                 title="Weighted z-score composite across scoring, playmaking, rebounding, defense, impact"
               >
-                {composite > 0 ? '+' : ''}{composite.toFixed(2)}
+                {composite > 0 ? '+' : ''}
+                {composite.toFixed(2)}
               </span>
             )}
           </div>
@@ -60,6 +61,6 @@ export default function PlayerCard({ player, rank, season }: PlayerCardProps) {
           )}
         </div>
       </div>
-    </Link>
+    </Card>
   )
 }

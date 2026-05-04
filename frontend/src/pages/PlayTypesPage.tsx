@@ -1,12 +1,13 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePlayTypeLeaderboard } from '@/hooks/usePlayTypes'
 import { cn } from '@/lib/utils'
+import TabList, { type TabItem } from '@/components/ui/TabList'
 import type { PlayTypeKey, PlayTypeSortBy, PlayTypeLeaderboardEntry } from '@/types/playType'
 import { PLAY_TYPE_LABELS, SORT_BY_LABELS } from '@/types/playType'
 import { useSeason } from '@/context/SeasonContext'
 
-const PLAY_TYPE_TABS: { key: PlayTypeKey; label: string }[] = [
+const PLAY_TYPE_TABS: TabItem<PlayTypeKey>[] = [
   { key: 'isolation', label: 'Isolation' },
   { key: 'pnr_ball_handler', label: 'PnR Handler' },
   { key: 'pnr_roll_man', label: 'PnR Roll' },
@@ -17,7 +18,7 @@ const PLAY_TYPE_TABS: { key: PlayTypeKey; label: string }[] = [
   { key: 'off_screen', label: 'Off Screen' },
 ]
 
-const SORT_OPTIONS: { key: PlayTypeSortBy; label: string }[] = [
+const SORT_OPTIONS: TabItem<PlayTypeSortBy>[] = [
   { key: 'ppp', label: 'PPP' },
   { key: 'possessions', label: 'Possessions' },
   { key: 'fg_pct', label: 'FG%' },
@@ -35,7 +36,7 @@ function formatPercent(value: number | null): string {
 }
 
 function PPPBadge({ ppp, percentile }: { ppp: number | null; percentile: number | null }) {
-  if (ppp === null) return <span className="text-gray-400">—</span>
+  if (ppp === null) return <span className="text-gray-500 dark:text-gray-400">—</span>
 
   const getColor = () => {
     if (percentile === null) return 'bg-gray-100 text-gray-700'
@@ -99,6 +100,8 @@ export default function PlayTypesPage() {
   const [sortBy, setSortBy] = useState<PlayTypeSortBy>('ppp')
   const { season } = useSeason()
   const { data, isLoading, error } = usePlayTypeLeaderboard(activePlayType, sortBy, season, 50, 50)
+  const playTypePanelId = useId()
+  const sortPanelId = useId()
 
   return (
     <div>
@@ -111,99 +114,85 @@ export default function PlayTypesPage() {
 
       {/* Play Type Tabs */}
       <div className="mb-4">
-        <div className="text-sm font-medium text-gray-500 mb-2 dark:text-white">Play Type</div>
-        <div className="flex flex-wrap gap-2">
-          {PLAY_TYPE_TABS.map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setActivePlayType(tab.key)}
-              className={cn(
-                'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
-                activePlayType === tab.key
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Play Type</div>
+        <TabList<PlayTypeKey>
+          tabs={PLAY_TYPE_TABS}
+          activeKey={activePlayType}
+          onChange={setActivePlayType}
+          ariaLabel="Play type"
+          panelId={playTypePanelId}
+        />
       </div>
 
       {/* Sort Options */}
       <div className="mb-6">
-        <div className="text-sm font-medium text-gray-500 mb-2 dark:text-white">Sort By</div>
-        <div className="flex gap-2">
-          {SORT_OPTIONS.map(option => (
-            <button
-              key={option.key}
-              onClick={() => setSortBy(option.key)}
-              className={cn(
-                'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
-                sortBy === option.key
-                  ? 'bg-gray-800 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Sort By</div>
+        <TabList<PlayTypeSortBy>
+          tabs={SORT_OPTIONS}
+          activeKey={sortBy}
+          onChange={setSortBy}
+          ariaLabel="Sort metric"
+          panelId={sortPanelId}
+        />
       </div>
 
       {isLoading && (
-        <div className="text-center py-8">
+        <div className="text-center py-8" role="status" aria-live="polite">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-primary-500 border-t-transparent" />
-          <p className="mt-2 text-gray-600">Loading...</p>
+          <p className="mt-2 text-gray-600 dark:text-gray-300">Loading...</p>
         </div>
       )}
 
       {error && (
-        <div className="text-center py-8">
-          <p className="text-red-500">Error loading play type stats</p>
+        <div className="text-center py-8" role="alert">
+          <p className="text-rose-600 dark:text-rose-400">Error loading play type stats</p>
         </div>
       )}
 
       {data && data.entries.length > 0 && (
-        <div className="overflow-x-auto">
+        <div id={playTypePanelId} role="tabpanel" className="overflow-x-auto">
           <div className="mb-4 text-sm text-gray-600 dark:text-white">
             Showing <span className="font-medium">{PLAY_TYPE_LABELS[activePlayType]}</span> leaders
             sorted by <span className="font-medium">{SORT_BY_LABELS[sortBy]}</span>
           </div>
           <table className="min-w-full divide-y divide-gray-200 table-fixed">
+            <caption className="sr-only">
+              {PLAY_TYPE_LABELS[activePlayType]} play type leaderboard sorted by{' '}
+              {SORT_BY_LABELS[sortBy]}
+            </caption>
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
                   Rank
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
                   Player
                 </th>
-                <th className={cn(
+                <th scope="col" className={cn(
                   'px-4 py-3 text-center text-xs font-medium uppercase tracking-wider',
-                  sortBy === 'possessions' ? 'text-primary-600' : 'text-gray-500'
+                  sortBy === 'possessions' ? 'text-primary-600' : 'text-gray-500 dark:text-gray-400'
                 )}>
                   POSS
                 </th>
-                <th className={cn(
+                <th scope="col" className={cn(
                   'px-4 py-3 text-center text-xs font-medium uppercase tracking-wider',
-                  sortBy === 'ppp' ? 'text-primary-600' : 'text-gray-500'
+                  sortBy === 'ppp' ? 'text-primary-600' : 'text-gray-500 dark:text-gray-400'
                 )}>
                   PPP
                 </th>
-                <th className={cn(
+                <th scope="col" className={cn(
                   'px-4 py-3 text-center text-xs font-medium uppercase tracking-wider',
-                  sortBy === 'fg_pct' ? 'text-primary-600' : 'text-gray-500'
+                  sortBy === 'fg_pct' ? 'text-primary-600' : 'text-gray-500 dark:text-gray-400'
                 )}>
                   FG%
                 </th>
-                <th className={cn(
+                <th scope="col" className={cn(
                   'px-4 py-3 text-center text-xs font-medium uppercase tracking-wider',
-                  sortBy === 'frequency' ? 'text-primary-600' : 'text-gray-500'
+                  sortBy === 'frequency' ? 'text-primary-600' : 'text-gray-500 dark:text-gray-400'
                 )}>
                   FREQ
                 </th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   PTS
                 </th>
               </tr>
@@ -219,7 +208,7 @@ export default function PlayTypesPage() {
 
       {data && data.entries.length === 0 && (
         <div className="text-center py-8">
-          <p className="text-gray-500">No data available for this play type</p>
+          <p className="text-gray-500 dark:text-gray-400">No data available for this play type</p>
         </div>
       )}
 

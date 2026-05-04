@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useId, useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { CortexPlayer } from '@/data/cortexTypes'
 import type { GameLog } from '@/types'
@@ -50,6 +50,7 @@ export default function GameLogsTab({ player }: { player: CortexPlayer }) {
   const [sortDir, setSortDir] = useState<SortDirection>('desc')
   const [wlFilter, setWLFilter] = useState<WLFilter>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const searchId = useId()
 
   const { data: gameLogs, isLoading, isError } = useQuery({
     queryKey: ['gameLogs', player.id],
@@ -144,16 +145,20 @@ export default function GameLogsTab({ player }: { player: CortexPlayer }) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-gray-400 font-mono text-sm animate-pulse">Loading game logs...</p>
+      <div className="flex items-center justify-center h-64" role="status" aria-live="polite">
+        <p className="text-gray-500 dark:text-gray-400 font-mono text-sm animate-pulse">
+          Loading game logs...
+        </p>
       </div>
     )
   }
 
   if (isError) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-red-500 font-mono text-sm">Failed to load game logs. Please try again.</p>
+      <div className="flex items-center justify-center h-64" role="alert">
+        <p className="text-rose-600 dark:text-rose-400 font-mono text-sm">
+          Failed to load game logs. Please try again.
+        </p>
       </div>
     )
   }
@@ -165,15 +170,17 @@ export default function GameLogsTab({ player }: { player: CortexPlayer }) {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
         {/* W/L Filter */}
-        <div className="flex gap-1">
+        <div role="group" aria-label="Win/Loss filter" className="flex gap-1">
           {(['all', 'W', 'L'] as const).map((filter) => (
             <button
               key={filter}
+              type="button"
               onClick={() => setWLFilter(filter)}
+              aria-pressed={wlFilter === filter}
               className={`px-3 py-1.5 text-xs uppercase tracking-wider rounded transition-colors ${
                 wlFilter === filter
                   ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
             >
               {filter === 'all' ? 'All' : filter === 'W' ? 'Wins' : 'Losses'}
@@ -182,12 +189,16 @@ export default function GameLogsTab({ player }: { player: CortexPlayer }) {
         </div>
 
         {/* Search */}
+        <label htmlFor={searchId} className="sr-only">
+          Search game-log matchups
+        </label>
         <input
+          id={searchId}
           type="text"
           placeholder="Search matchup..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="px-3 py-1.5 text-sm bg-white border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 w-full sm:w-48 font-mono"
+          className="px-3 py-1.5 text-sm bg-white border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 w-full sm:w-48 font-mono dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200"
         />
       </div>
 
@@ -195,46 +206,49 @@ export default function GameLogsTab({ player }: { player: CortexPlayer }) {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
+            <caption className="sr-only">
+              Game log for {player.name}, {filteredAndSorted.length} games
+            </caption>
             <thead>
               <tr className="border-b border-gray-200 text-[10px] text-gray-500 uppercase tracking-wider">
-                <th className={`text-left ${headerClass}`} onClick={() => handleSort('game_date')}>
+                <th scope="col" className={`text-left ${headerClass}`} onClick={() => handleSort('game_date')}>
                   Date<SortArrow field="game_date" sortField={sortField} sortDir={sortDir} />
                 </th>
-                <th className={`text-left ${headerClass}`}>Matchup</th>
-                <th className={`text-right ${headerClass}`} onClick={() => handleSort('minutes')}>
+                <th scope="col" className={`text-left ${headerClass}`}>Matchup</th>
+                <th scope="col" className={`text-right ${headerClass}`} onClick={() => handleSort('minutes')}>
                   MIN<SortArrow field="minutes" sortField={sortField} sortDir={sortDir} />
                 </th>
-                <th className={`text-right ${headerClass}`} onClick={() => handleSort('points')}>
+                <th scope="col" className={`text-right ${headerClass}`} onClick={() => handleSort('points')}>
                   PTS<SortArrow field="points" sortField={sortField} sortDir={sortDir} />
                 </th>
-                <th className={`text-right ${headerClass}`} onClick={() => handleSort('rebounds')}>
+                <th scope="col" className={`text-right ${headerClass}`} onClick={() => handleSort('rebounds')}>
                   REB<SortArrow field="rebounds" sortField={sortField} sortDir={sortDir} />
                 </th>
-                <th className={`text-right ${headerClass}`} onClick={() => handleSort('assists')}>
+                <th scope="col" className={`text-right ${headerClass}`} onClick={() => handleSort('assists')}>
                   AST<SortArrow field="assists" sortField={sortField} sortDir={sortDir} />
                 </th>
-                <th className={`text-right ${headerClass}`} onClick={() => handleSort('steals')}>
+                <th scope="col" className={`text-right ${headerClass}`} onClick={() => handleSort('steals')}>
                   STL<SortArrow field="steals" sortField={sortField} sortDir={sortDir} />
                 </th>
-                <th className={`text-right ${headerClass}`} onClick={() => handleSort('blocks')}>
+                <th scope="col" className={`text-right ${headerClass}`} onClick={() => handleSort('blocks')}>
                   BLK<SortArrow field="blocks" sortField={sortField} sortDir={sortDir} />
                 </th>
-                <th className={`text-right ${headerClass}`} onClick={() => handleSort('turnovers')}>
+                <th scope="col" className={`text-right ${headerClass}`} onClick={() => handleSort('turnovers')}>
                   TOV<SortArrow field="turnovers" sortField={sortField} sortDir={sortDir} />
                 </th>
-                <th className={`text-right ${headerClass}`} onClick={() => handleSort('fg_pct')}>
+                <th scope="col" className={`text-right ${headerClass}`} onClick={() => handleSort('fg_pct')}>
                   FG<SortArrow field="fg_pct" sortField={sortField} sortDir={sortDir} />
                 </th>
-                <th className={`text-right ${headerClass}`} onClick={() => handleSort('fg3_pct')}>
+                <th scope="col" className={`text-right ${headerClass}`} onClick={() => handleSort('fg3_pct')}>
                   3PT<SortArrow field="fg3_pct" sortField={sortField} sortDir={sortDir} />
                 </th>
-                <th className={`text-right ${headerClass}`} onClick={() => handleSort('ft_pct')}>
+                <th scope="col" className={`text-right ${headerClass}`} onClick={() => handleSort('ft_pct')}>
                   FT<SortArrow field="ft_pct" sortField={sortField} sortDir={sortDir} />
                 </th>
-                <th className={`text-right ${headerClass}`} onClick={() => handleSort('plus_minus')}>
+                <th scope="col" className={`text-right ${headerClass}`} onClick={() => handleSort('plus_minus')}>
                   +/-<SortArrow field="plus_minus" sortField={sortField} sortDir={sortDir} />
                 </th>
-                <th className={`text-right ${headerClass}`} onClick={() => handleSort('game_score')}>
+                <th scope="col" className={`text-right ${headerClass}`} onClick={() => handleSort('game_score')}>
                   GmSc<SortArrow field="game_score" sortField={sortField} sortDir={sortDir} />
                 </th>
               </tr>
@@ -309,7 +323,7 @@ export default function GameLogsTab({ player }: { player: CortexPlayer }) {
 
               {filteredAndSorted.length === 0 && (
                 <tr>
-                  <td colSpan={14} className="px-4 py-8 text-center text-gray-400 font-mono text-sm">
+                  <td colSpan={14} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400 font-mono text-sm">
                     No games found matching your filters.
                   </td>
                 </tr>

@@ -17,7 +17,7 @@ const PlayerCardPage = lazy(() => import('./pages/PlayerCardPage'))
 function RouteFallback() {
   return (
     <div className="flex items-center justify-center h-64" role="status" aria-live="polite">
-      <p className="text-gray-400 font-mono text-sm animate-pulse">Loading…</p>
+      <p className="text-gray-500 dark:text-gray-400 font-mono text-sm animate-pulse">Loading…</p>
     </div>
   )
 }

@@ -8,11 +8,19 @@ export default function PlayerDetailPage() {
   const { data: player, isLoading, error } = usePlayer(Number(id))
 
   if (isLoading) {
-    return <div className="text-center py-8">Loading player...</div>
+    return (
+      <div className="text-center py-8" role="status" aria-live="polite">
+        Loading player...
+      </div>
+    )
   }
 
   if (error || !player) {
-    return <div className="text-center py-8 text-red-500">Player not found</div>
+    return (
+      <div className="text-center py-8 text-rose-600 dark:text-rose-400" role="alert">
+        Player not found
+      </div>
+    )
   }
 
   return (
@@ -25,7 +33,7 @@ export default function PlayerDetailPage() {
               {player.position} • {player.team_abbreviation} • {player.season}
             </p>
             {player.games_played && (
-              <p className="text-sm text-gray-400">{player.games_played} games played</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{player.games_played} games played</p>
             )}
           </div>
         </div>

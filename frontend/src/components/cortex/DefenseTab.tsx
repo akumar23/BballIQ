@@ -1,5 +1,21 @@
 import type { CortexPlayer } from '@/data/cortexTypes'
 import { SectionHeader, StatBox, DiffBadge, qualityColor, fitColor } from './shared'
+import { getPolarityClass, getPolarityIcon } from '@/lib/utils'
+
+/**
+ * Translate a raw DFG% into a synthetic percentile so the polarity helpers
+ * can drive both the color and the directional glyph. Defense inverts the
+ * polarity (lower = better).
+ */
+function dfgPercentile(dfgPct: number): number {
+  // Heuristic mapping: <38% elite, 38-44 above avg, 44-50 average,
+  // 50-56 below avg, >56 poor. Returns 0-100.
+  if (dfgPct < 38) return 90
+  if (dfgPct < 44) return 70
+  if (dfgPct < 50) return 50
+  if (dfgPct < 56) return 30
+  return 10
+}
 
 function formatSignedPct(value: number): string {
   const sign = value > 0 ? '+' : ''
@@ -81,11 +97,17 @@ export default function DefenseTab({ player }: { player: CortexPlayer }) {
             <div key={z.zone} className="mb-3">
               <div className="flex justify-between text-xs mb-1">
                 <span className="text-gray-600">{z.zone}</span>
-                <span className="font-mono text-gray-700">{z.dfgPct.toFixed(1)}% <span className="text-gray-400">({z.freq}%)</span></span>
+                <span className="font-mono text-gray-700">{z.dfgPct.toFixed(1)}% <span className="text-gray-500 dark:text-gray-400">({z.freq}%)</span></span>
               </div>
               <div className="w-full bg-gray-100 rounded-full h-2">
                 <div
-                  className={`h-2 rounded-full ${z.dfgPct < 40 ? 'bg-green-500' : z.dfgPct < 48 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                  className={`h-2 rounded-full ${
+                    z.dfgPct < 40
+                      ? 'bg-emerald-500 dark:bg-emerald-400'
+                      : z.dfgPct < 48
+                        ? 'bg-amber-500 dark:bg-amber-400'
+                        : 'bg-rose-500 dark:bg-rose-400'
+                  }`}
                   style={{ width: `${z.dfgPct}%` }}
                 />
               </div>
@@ -148,7 +170,7 @@ export default function DefenseTab({ player }: { player: CortexPlayer }) {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">
                   Defensive Terrain
-                  <span className="ml-2 normal-case tracking-normal text-gray-400">zone-weighted stopping power</span>
+                  <span className="ml-2 normal-case tracking-normal text-gray-500 dark:text-gray-400">zone-weighted stopping power</span>
                 </p>
                 <div className="flex items-center gap-4 mb-3">
                   <div className="flex-1">
@@ -189,7 +211,7 @@ export default function DefenseTab({ player }: { player: CortexPlayer }) {
                     )
                   })}
                 </div>
-                <p className="text-[10px] text-gray-400 mt-3">
+                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-3">
                   Each row = frequency × (−opp FG% vs league). Negative opp FG% diff = suppression (good).
                 </p>
               </div>
@@ -199,7 +221,7 @@ export default function DefenseTab({ player }: { player: CortexPlayer }) {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">
                   Contest-to-Miss Conversion
-                  <span className="ml-2 normal-case tracking-normal text-gray-400">volume × efficiency</span>
+                  <span className="ml-2 normal-case tracking-normal text-gray-500 dark:text-gray-400">volume × efficiency</span>
                 </p>
                 <div className="flex items-center gap-4 mb-3">
                   <div className="flex-1">
@@ -232,7 +254,7 @@ export default function DefenseTab({ player }: { player: CortexPlayer }) {
                     subtitle="of defended FGA"
                   />
                 </div>
-                <p className="text-[10px] text-gray-400 mt-3">
+                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-3">
                   Contests include help-side; defended FGA only counts primary coverage.
                 </p>
               </div>
@@ -254,14 +276,20 @@ export default function DefenseTab({ player }: { player: CortexPlayer }) {
             </tr>
           </thead>
           <tbody>
-            {d.matchupLog.map((m) => (
-              <tr key={m.opponent} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-2.5 text-gray-900">{m.opponent}</td>
-                <td className="px-4 py-2.5 text-right font-mono text-gray-700">{m.possessions}</td>
-                <td className={`px-4 py-2.5 text-right font-mono font-bold ${m.dfgPct < 40 ? 'text-green-600' : m.dfgPct < 48 ? 'text-yellow-600' : 'text-red-600'}`}>{m.dfgPct.toFixed(1)}%</td>
-                <td className="px-4 py-2.5 text-right font-mono text-gray-700">{m.ptsAllowed}</td>
-              </tr>
-            ))}
+            {d.matchupLog.map((m) => {
+              const pct = dfgPercentile(m.dfgPct)
+              return (
+                <tr key={m.opponent} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-2.5 text-gray-900">{m.opponent}</td>
+                  <td className="px-4 py-2.5 text-right font-mono text-gray-700">{m.possessions}</td>
+                  <td className={`px-4 py-2.5 text-right font-mono font-bold ${getPolarityClass(pct, { invert: true })}`}>
+                    <span aria-hidden="true" className="mr-1">{getPolarityIcon(pct, { invert: true })}</span>
+                    {m.dfgPct.toFixed(1)}%
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono text-gray-700">{m.ptsAllowed}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

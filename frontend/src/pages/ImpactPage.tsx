@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useImpactLeaderboard } from '@/hooks/useImpact'
-import { cn, formatMetric, getPercentileColor } from '@/lib/utils'
+import { cn, formatMetric, getPolarityClass, getPolarityIcon } from '@/lib/utils'
+import TabList, { type TabItem } from '@/components/ui/TabList'
 import type { ImpactLeaderboardEntry } from '@/types'
 import { useSeason } from '@/context/SeasonContext'
 
@@ -63,13 +64,14 @@ function PlayerImpactRow({ player, rank }: { player: ImpactLeaderboardEntry; ran
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <span className={cn(
-              'text-lg font-bold',
-              (player.contextualized_net_impact ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'
+              'text-lg font-bold inline-flex items-center gap-1',
+              getPolarityClass(player.impact_percentile)
             )}>
+              <span aria-hidden="true">{getPolarityIcon(player.impact_percentile)}</span>
               {(player.contextualized_net_impact ?? 0) >= 0 ? '+' : ''}
               {formatMetric(player.contextualized_net_impact)}
             </span>
-            <span className={cn('text-sm', getPercentileColor(player.impact_percentile))}>
+            <span className={cn('text-sm', getPolarityClass(player.impact_percentile))}>
               {player.impact_percentile}th
             </span>
           </div>
@@ -78,18 +80,24 @@ function PlayerImpactRow({ player, rank }: { player: ImpactLeaderboardEntry; ran
       </td>
       <td className="px-4 py-3 text-center">
         <span className={cn(
-          'font-medium',
-          (player.contextualized_off_impact ?? 0) >= 0 ? 'text-amber-600' : 'text-red-500'
+          'font-medium inline-flex items-center gap-1',
+          (player.contextualized_off_impact ?? 0) >= 0
+            ? 'text-emerald-600 dark:text-emerald-400'
+            : 'text-rose-600 dark:text-rose-400'
         )}>
+          <span aria-hidden="true">{(player.contextualized_off_impact ?? 0) >= 0 ? '\u25B2' : '\u25BC'}</span>
           {(player.contextualized_off_impact ?? 0) >= 0 ? '+' : ''}
           {formatMetric(player.contextualized_off_impact)}
         </span>
       </td>
       <td className="px-4 py-3 text-center">
         <span className={cn(
-          'font-medium',
-          (player.contextualized_def_impact ?? 0) <= 0 ? 'text-blue-600' : 'text-red-500'
+          'font-medium inline-flex items-center gap-1',
+          (player.contextualized_def_impact ?? 0) <= 0
+            ? 'text-emerald-600 dark:text-emerald-400'
+            : 'text-rose-600 dark:text-rose-400'
         )}>
+          <span aria-hidden="true">{(player.contextualized_def_impact ?? 0) <= 0 ? '\u25B2' : '\u25BC'}</span>
           {(player.contextualized_def_impact ?? 0) >= 0 ? '+' : ''}
           {formatMetric(player.contextualized_def_impact)}
         </span>
@@ -125,11 +133,12 @@ export default function ImpactPage() {
   const [sortBy, setSortBy] = useState<SortType>('net')
   const { season } = useSeason()
   const { data: players, isLoading, error } = useImpactLeaderboard(sortBy, season)
+  const panelId = useId()
 
-  const tabs: { key: SortType; label: string; description: string }[] = [
-    { key: 'net', label: 'Net Impact', description: 'Overall on/off adjusted for context' },
-    { key: 'offense', label: 'Offensive', description: 'Offensive impact adjusted' },
-    { key: 'defense', label: 'Defensive', description: 'Defensive impact adjusted' },
+  const tabs: (TabItem<SortType> & { description: string })[] = [
+    { key: 'net', label: 'Net Impact', title: 'Overall on/off adjusted for context', description: 'Overall on/off adjusted for context' },
+    { key: 'offense', label: 'Offensive', title: 'Offensive impact adjusted', description: 'Offensive impact adjusted' },
+    { key: 'defense', label: 'Defensive', title: 'Defensive impact adjusted', description: 'Defensive impact adjusted' },
   ]
 
   return (
@@ -153,64 +162,59 @@ export default function ImpactPage() {
       </div>
 
       {/* Sort Tabs */}
-      <div className="flex gap-2 mb-6">
-        {tabs.map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setSortBy(tab.key)}
-            className={cn(
-              'px-4 py-2 rounded-lg font-medium transition-colors',
-              sortBy === tab.key
-                ? 'bg-primary-600 text-white dark:bg-gray-800'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:text-gray-900'
-            )}
-            title={tab.description}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <TabList<SortType>
+        tabs={tabs}
+        activeKey={sortBy}
+        onChange={setSortBy}
+        ariaLabel="Impact sort mode"
+        panelId={panelId}
+        className="mb-6"
+      />
 
       {isLoading && (
-        <div className="text-center py-8">
+        <div className="text-center py-8" role="status" aria-live="polite">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-primary-500 border-t-transparent" />
-          <p className="mt-2 text-gray-600">Loading impact data...</p>
+          <p className="mt-2 text-gray-600 dark:text-gray-300">Loading impact data...</p>
         </div>
       )}
 
       {error && (
-        <div className="text-center py-8">
-          <p className="text-red-500">Error loading impact data</p>
-          <p className="text-sm text-gray-500 mt-1">
+        <div className="text-center py-8" role="alert">
+          <p className="text-rose-600 dark:text-rose-400">Error loading impact data</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Make sure to run the impact data fetch script first
           </p>
         </div>
       )}
 
       {players && players.length > 0 && (
-        <div className="overflow-x-auto">
+        <div id={panelId} role="tabpanel" className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
+            <caption className="sr-only">
+              Contextualized impact leaderboard sorted by{' '}
+              {tabs.find((t) => t.key === sortBy)?.label}
+            </caption>
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Rank
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Player
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Net Impact
                 </th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Off Impact
                 </th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Def Impact
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Adjustments
                 </th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Reliability
                 </th>
               </tr>

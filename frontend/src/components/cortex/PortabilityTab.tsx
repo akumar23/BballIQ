@@ -10,10 +10,10 @@ function formatNrtg(value: number | null): string {
 
 /** Color an NRtg value: positive = green, negative = red, near-zero = yellow. */
 function nrtgColor(value: number | null): string {
-  if (value === null) return 'text-gray-400'
-  if (value >= 2) return 'text-green-600'
-  if (value <= -2) return 'text-red-600'
-  return 'text-yellow-600'
+  if (value === null) return 'text-gray-500 dark:text-gray-400'
+  if (value >= 2) return 'text-emerald-600 dark:text-emerald-400'
+  if (value <= -2) return 'text-rose-600 dark:text-rose-400'
+  return 'text-amber-600 dark:text-amber-400'
 }
 
 /** Render a sample-size hint beneath a bucket value. */
@@ -116,7 +116,7 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
                 </div>
               </div>
             </div>
-            <p className="text-[10px] text-gray-400 mt-2 ml-36">{s.note}</p>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-2 ml-36">{s.note}</p>
           </div>
         ))}
       </div>
@@ -132,7 +132,7 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
               <p className={`text-xl font-mono font-bold ${nrtgColor(p.teammateDependency.eliteSpacingNetRtg)}`}>
                 {formatNrtg(p.teammateDependency.eliteSpacingNetRtg)}
               </p>
-              <p className="text-[10px] text-gray-400 font-mono">{formatMinutes(p.teammateDependency.eliteSpacingMinutes)}</p>
+              <p className="text-[10px] text-gray-500 dark:text-gray-400 font-mono">{formatMinutes(p.teammateDependency.eliteSpacingMinutes)}</p>
             </div>
             <div className="text-center">
               <p className={`text-sm font-mono font-bold ${nrtgColor(p.teammateDependency.spacingDelta)}`}>
@@ -144,7 +144,7 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
               <p className={`text-xl font-mono font-bold ${nrtgColor(p.teammateDependency.poorSpacingNetRtg)}`}>
                 {formatNrtg(p.teammateDependency.poorSpacingNetRtg)}
               </p>
-              <p className="text-[10px] text-gray-400 font-mono">{formatMinutes(p.teammateDependency.poorSpacingMinutes)}</p>
+              <p className="text-[10px] text-gray-500 dark:text-gray-400 font-mono">{formatMinutes(p.teammateDependency.poorSpacingMinutes)}</p>
             </div>
           </div>
         </div>
@@ -156,19 +156,19 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
               <p className={`text-xl font-mono font-bold ${nrtgColor(p.teammateDependency.withRimProtectorNetRtg)}`}>
                 {formatNrtg(p.teammateDependency.withRimProtectorNetRtg)}
               </p>
-              <p className="text-[10px] text-gray-400 font-mono">{formatMinutes(p.teammateDependency.withRimProtectorMinutes)}</p>
+              <p className="text-[10px] text-gray-500 dark:text-gray-400 font-mono">{formatMinutes(p.teammateDependency.withRimProtectorMinutes)}</p>
             </div>
             <div className="text-right">
               <p className="text-[10px] text-gray-500">Without Rim Protector</p>
               <p className={`text-xl font-mono font-bold ${nrtgColor(p.teammateDependency.withoutRimProtectorNetRtg)}`}>
                 {formatNrtg(p.teammateDependency.withoutRimProtectorNetRtg)}
               </p>
-              <p className="text-[10px] text-gray-400 font-mono">{formatMinutes(p.teammateDependency.withoutRimProtectorMinutes)}</p>
+              <p className="text-[10px] text-gray-500 dark:text-gray-400 font-mono">{formatMinutes(p.teammateDependency.withoutRimProtectorMinutes)}</p>
             </div>
           </div>
         </div>
       </div>
-      <p className="text-[10px] text-gray-400 mb-4">
+      <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-4">
         Dependency Score: {p.teammateDependency.dependencyScore}/100 (lower = more portable). Buckets with &lt; 50 min are shown as &ldquo;N/A&rdquo;.
       </p>
 
@@ -181,7 +181,7 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">
                   Friction Efficiency
-                  <span className="ml-2 normal-case tracking-normal text-gray-400">eFG% by defender distance</span>
+                  <span className="ml-2 normal-case tracking-normal text-gray-500 dark:text-gray-400">eFG% by defender distance</span>
                 </p>
                 <div className="space-y-2 mb-3">
                   {[
@@ -223,7 +223,7 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">
                   Gravity Index
-                  <span className="ml-2 normal-case tracking-normal text-gray-400">proxy: tight-coverage + on/off lift</span>
+                  <span className="ml-2 normal-case tracking-normal text-gray-500 dark:text-gray-400">proxy: tight-coverage + on/off lift</span>
                 </p>
                 <div className="flex items-center gap-4 mb-3">
                   <div className="flex-1">
@@ -250,7 +250,7 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
                     subtitle="on − off court"
                   />
                 </div>
-                <p className="text-[10px] text-gray-400 mt-3">
+                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-3">
                   Proxy — direct teammate CS3 defender-distance on/off isn&apos;t exposed by NBA Stats.
                 </p>
               </div>
@@ -260,7 +260,7 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">
                   Shot Diet Entropy
-                  <span className="ml-2 normal-case tracking-normal text-gray-400">scheme-proof vs specialist</span>
+                  <span className="ml-2 normal-case tracking-normal text-gray-500 dark:text-gray-400">scheme-proof vs specialist</span>
                 </p>
                 <div className="flex items-center gap-4 mb-3">
                   <div className="flex-1">
@@ -294,7 +294,7 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">
                   Rim Gravity
-                  <span className="ml-2 normal-case tracking-normal text-gray-400">how much you bend the D inward</span>
+                  <span className="ml-2 normal-case tracking-normal text-gray-500 dark:text-gray-400">how much you bend the D inward</span>
                 </p>
                 <div className="flex items-center gap-4 mb-3">
                   <div className="flex-1">
@@ -326,11 +326,11 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">
                   Lineup Buoyancy
-                  <span className="ml-2 normal-case tracking-normal text-gray-400">floor-raiser vs ceiling-raiser</span>
+                  <span className="ml-2 normal-case tracking-normal text-gray-500 dark:text-gray-400">floor-raiser vs ceiling-raiser</span>
                 </p>
                 <div className="flex items-baseline justify-between mb-3">
                   <p className="text-sm font-semibold text-primary-700">{lb.buoyancyType}</p>
-                  <p className="text-[10px] text-gray-400 font-mono">
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 font-mono">
                     {lb.totalLineups} lineups • {Math.round(lb.qualifyingMinutes)} min
                   </p>
                 </div>
@@ -362,7 +362,7 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
                     subtitle={`${Math.round(lb.bestTercileMinutes)} min`}
                   />
                 </div>
-                <p className="text-[10px] text-gray-400 mt-3">
+                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-3">
                   Spread: {formatNrtg(lb.lineupSpread)} • Median: {formatNrtg(lb.medianLineupNetRtg)}
                 </p>
               </div>
@@ -372,7 +372,7 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">
                   Scheme Robustness
-                  <span className="ml-2 normal-case tracking-normal text-gray-400">PPP variance, top 3 play types</span>
+                  <span className="ml-2 normal-case tracking-normal text-gray-500 dark:text-gray-400">PPP variance, top 3 play types</span>
                 </p>
                 <div className="flex items-center gap-4 mb-3">
                   <div className="flex-1">
@@ -412,7 +412,7 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
                     subtitle="lower = scheme-proof"
                   />
                 </div>
-                <p className="text-[10px] text-gray-400 mt-3">
+                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-3">
                   Collapse risk: {sr.collapseRiskScore.toFixed(1)}/100. High CV = one mode carries; others fall off.
                 </p>
               </div>
@@ -422,7 +422,7 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">
                   Late-Season Trend
-                  <span className="ml-2 normal-case tracking-normal text-gray-400">fatigue/engagement proxy</span>
+                  <span className="ml-2 normal-case tracking-normal text-gray-500 dark:text-gray-400">fatigue/engagement proxy</span>
                 </p>
                 <div className="flex items-center justify-between mb-3">
                   <div>
@@ -430,7 +430,7 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
                     <p className="text-xl font-mono font-bold text-gray-900">
                       {lst.earlyGameScore.toFixed(1)}
                     </p>
-                    <p className="text-[10px] text-gray-400 font-mono">{lst.earlyMinutesAvg.toFixed(1)} mpg</p>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 font-mono">{lst.earlyMinutesAvg.toFixed(1)} mpg</p>
                   </div>
                   <div className="text-center">
                     <p className={`text-lg font-mono font-bold ${lst.trendDelta >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -443,10 +443,10 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
                     <p className="text-xl font-mono font-bold text-gray-900">
                       {lst.lateGameScore.toFixed(1)}
                     </p>
-                    <p className="text-[10px] text-gray-400 font-mono">{lst.lateMinutesAvg.toFixed(1)} mpg</p>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 font-mono">{lst.lateMinutesAvg.toFixed(1)} mpg</p>
                   </div>
                 </div>
-                <p className="text-[10px] text-gray-400">
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">
                   Proxy — NBA Stats doesn&apos;t expose per-quarter tracking at ingest. Season-tails give the closest fatigue signal.
                 </p>
               </div>
@@ -456,7 +456,7 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 lg:col-span-2">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">
                   Pass Funnel & Cascade Playmaking
-                  <span className="ml-2 normal-case tracking-normal text-gray-400">creation conversion chain</span>
+                  <span className="ml-2 normal-case tracking-normal text-gray-500 dark:text-gray-400">creation conversion chain</span>
                 </p>
                 <div className="grid grid-cols-4 gap-2 mb-3">
                   {[
@@ -537,7 +537,7 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
                 &#916; {f.deltaFromCurrent >= 0 ? '+' : ''}{f.deltaFromCurrent.toFixed(1)}
               </span>
             </div>
-            <p className="text-[10px] text-gray-400">{f.reasoning}</p>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400">{f.reasoning}</p>
           </div>
         ))}
       </div>
@@ -551,10 +551,10 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
               <p className="text-sm text-gray-900 font-semibold">{c.player}</p>
               <div className="text-right">
                 <p className="text-xs font-mono text-primary-600">{c.similarity}% similar</p>
-                <p className="text-xs font-mono text-gray-400">Port: {c.portabilityScore}</p>
+                <p className="text-xs font-mono text-gray-500 dark:text-gray-400">Port: {c.portabilityScore}</p>
               </div>
             </div>
-            <p className="text-[10px] text-gray-400">{c.analysis}</p>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400">{c.analysis}</p>
           </div>
         ))}
       </div>

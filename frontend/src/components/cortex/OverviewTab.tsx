@@ -1,10 +1,14 @@
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Cell, LabelList } from 'recharts'
 import type { CortexPlayer } from '@/data/cortexTypes'
-import { SectionHeader, StatBox } from './shared'
+import Card from '@/components/ui/Card'
+import SectionHeader from '@/components/ui/SectionHeader'
+import Stat from '@/components/ui/Stat'
+import { getChartTheme } from '@/lib/chartTheme'
 
 export default function OverviewTab({ player }: { player: CortexPlayer }) {
   const t = player.traditional
   const a = player.advanced
+  const theme = getChartTheme()
 
   const impactModels = [
     { name: 'RAPM', value: player.impact.rapm },
@@ -26,7 +30,9 @@ export default function OverviewTab({ player }: { player: CortexPlayer }) {
           ['FG%', (t.fgPct * 100).toFixed(1)], ['3P%', (t.threePct * 100).toFixed(1)],
           ['FT%', (t.ftPct * 100).toFixed(1)], ['TOV', t.tov],
         ].map(([label, val]) => (
-          <StatBox key={label as string} label={label as string} value={val as string | number} />
+          <Card key={label as string} variant="inset">
+            <Stat label={label as string} value={val as string | number} size="md" />
+          </Card>
         ))}
       </div>
 
@@ -38,41 +44,50 @@ export default function OverviewTab({ player }: { player: CortexPlayer }) {
           ['BPM', a.bpm.toFixed(1)], ['VORP', a.vorp.toFixed(1)], ['ORtg', a.ortg],
           ['DRtg', a.drtg], ['USG%', a.usg.toFixed(1)], ['OWS', a.ows.toFixed(1)], ['DWS', a.dws.toFixed(1)],
         ].map(([label, val]) => (
-          <StatBox key={label as string} label={label as string} value={val as string | number} />
+          <Card key={label as string} variant="inset">
+            <Stat label={label as string} value={val as string | number} size="md" />
+          </Card>
         ))}
       </div>
 
       {/* Two Column: Radar + Impact Models */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-        {/* Radar Chart */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <h4 className="text-xs text-gray-500 uppercase tracking-wider mb-4">Percentile Profile</h4>
+        <Card>
+          <h4 className="text-caption text-text-muted uppercase tracking-wider mb-4">
+            Percentile Profile
+          </h4>
           <ResponsiveContainer width="100%" height={320}>
             <RadarChart data={player.radarData} cx="50%" cy="50%" outerRadius="75%">
-              <PolarGrid stroke="#e5e7eb" />
-              <PolarAngleAxis dataKey="stat" tick={{ fill: '#6b7280', fontSize: 11 }} />
+              <PolarGrid stroke={theme.grid} />
+              <PolarAngleAxis dataKey="stat" tick={{ fill: theme.axis, fontSize: 11 }} />
               <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
-              <Radar dataKey="value" stroke="#2563eb" fill="#2563eb" fillOpacity={0.15} strokeWidth={2} />
+              <Radar dataKey="value" stroke={theme.primary} fill={theme.primary} fillOpacity={0.15} strokeWidth={2} />
             </RadarChart>
           </ResponsiveContainer>
-        </div>
+        </Card>
 
-        {/* Impact Models Bar Chart */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <h4 className="text-xs text-gray-500 uppercase tracking-wider mb-4">All-In-One Impact Models</h4>
+        <Card>
+          <h4 className="text-caption text-text-muted uppercase tracking-wider mb-4">
+            All-In-One Impact Models
+          </h4>
           <ResponsiveContainer width="100%" height={320}>
             <BarChart data={impactModels} layout="vertical" margin={{ left: 60, right: 40 }}>
-              <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
-              <YAxis type="category" dataKey="name" tick={{ fill: '#6b7280', fontSize: 12 }} axisLine={false} tickLine={false} />
+              <XAxis type="number" tick={{ fill: theme.axis, fontSize: 11 }} axisLine={{ stroke: theme.grid }} />
+              <YAxis type="category" dataKey="name" tick={{ fill: theme.axis, fontSize: 12 }} axisLine={false} tickLine={false} />
               <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                 {impactModels.map((entry, i) => (
-                  <Cell key={i} fill={entry.value >= 0 ? '#2563eb' : '#ef4444'} />
+                  <Cell key={i} fill={entry.value >= 0 ? theme.primary : theme.neg} />
                 ))}
-                <LabelList dataKey="value" position="right" formatter={(v: unknown) => Number(v).toFixed(1)} style={{ fill: '#374151', fontSize: 11 }} />
+                <LabelList
+                  dataKey="value"
+                  position="right"
+                  formatter={(v: unknown) => Number(v).toFixed(1)}
+                  style={{ fill: theme.textPrimary, fontSize: 11 }}
+                />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-        </div>
+        </Card>
       </div>
     </div>
   )

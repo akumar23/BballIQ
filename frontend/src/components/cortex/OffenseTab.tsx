@@ -46,7 +46,7 @@ export default function OffenseTab({ player }: { player: CortexPlayer }) {
                 </td>
                 <td className={`px-4 py-2.5 text-right font-mono font-bold ${pppColor(pt.ppp)}`}>{pt.ppp.toFixed(2)}</td>
                 <td className="px-4 py-2.5 text-right font-mono text-gray-700">{(pt.efg * 100).toFixed(1)}%</td>
-                <td className="px-4 py-2.5 text-right font-mono text-gray-400">{pt.rank || '—'}</td>
+                <td className="px-4 py-2.5 text-right font-mono text-gray-500 dark:text-gray-400">{pt.rank || '—'}</td>
               </tr>
             ))}
           </tbody>
@@ -133,7 +133,7 @@ export default function OffenseTab({ player }: { player: CortexPlayer }) {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">
                   Leverage TS%
-                  <span className="ml-2 normal-case tracking-normal text-gray-400">blowouts stripped</span>
+                  <span className="ml-2 normal-case tracking-normal text-gray-500 dark:text-gray-400">blowouts stripped</span>
                 </p>
                 <div className="grid grid-cols-2 gap-3 mb-3">
                   <StatBox label="Overall TS%" value={`${(lev.overallTs * 100).toFixed(1)}%`} />
@@ -153,7 +153,7 @@ export default function OffenseTab({ player }: { player: CortexPlayer }) {
                     subtitle="vs overall"
                   />
                 </div>
-                <p className="text-[10px] text-gray-400">
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">
                   &ldquo;Leverage&rdquo; = games with |plus/minus| ≤ 15. Positive delta = steps up in close games.
                 </p>
               </div>
@@ -163,7 +163,7 @@ export default function OffenseTab({ player }: { player: CortexPlayer }) {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">
                   Possession Dwell
-                  <span className="ml-2 normal-case tracking-normal text-gray-400">output per ball-hold</span>
+                  <span className="ml-2 normal-case tracking-normal text-gray-500 dark:text-gray-400">output per ball-hold</span>
                 </p>
                 <div className="flex items-center gap-4 mb-3">
                   <div className="flex-1">
@@ -191,7 +191,7 @@ export default function OffenseTab({ player }: { player: CortexPlayer }) {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">
                   Mile-Adjusted Production
-                  <span className="ml-2 normal-case tracking-normal text-gray-400">(pts + ast) / mile</span>
+                  <span className="ml-2 normal-case tracking-normal text-gray-500 dark:text-gray-400">(pts + ast) / mile</span>
                 </p>
                 <div className="grid grid-cols-2 gap-3 mb-3">
                   <StatBox

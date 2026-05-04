@@ -2,12 +2,160 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Design tokens — semantic surfaces, borders, and text colors expressed as
+ * RGB triplets so Tailwind can compose them with `<alpha-value>` (e.g.
+ * `bg-surface/80`). Keeping them in CSS lets non-Tailwind consumers
+ * (Recharts, d3, inline styles) read them via
+ * `getComputedStyle(document.documentElement).getPropertyValue('--color-...')`
+ * for theme-aware charts.
+ *
+ * Light defaults live on `:root`; dark overrides on `.dark`.
+ */
+@layer base {
+  :root {
+    /* Surfaces */
+    --color-surface: 255 255 255;        /* white */
+    --color-surface-2: 249 250 251;      /* gray-50 */
+    --color-surface-3: 243 244 246;      /* gray-100 */
+
+    /* Borders */
+    --color-border-subtle: 229 231 235;  /* gray-200 */
+    --color-border-default: 209 213 219; /* gray-300 */
+
+    /* Text */
+    --color-text-primary: 17 24 39;      /* gray-900 */
+    --color-text-secondary: 75 85 99;    /* gray-600 */
+    --color-text-muted: 107 114 128;     /* gray-500 */
+
+    /* Polarity (positive = emerald, negative = rose, warn = amber, neutral = gray) */
+    --color-pos-soft: 209 250 229;       /* emerald-100 */
+    --color-pos: 16 185 129;             /* emerald-500 */
+    --color-pos-strong: 5 150 105;       /* emerald-600 */
+
+    --color-neg-soft: 254 226 226;       /* rose-100 */
+    --color-neg: 244 63 94;              /* rose-500 */
+    --color-neg-strong: 225 29 72;       /* rose-600 */
+
+    --color-warn-soft: 254 243 199;      /* amber-100 */
+    --color-warn: 245 158 11;            /* amber-500 */
+    --color-warn-strong: 217 119 6;      /* amber-600 */
+
+    --color-neutral-soft: 243 244 246;   /* gray-100 */
+    --color-neutral: 107 114 128;        /* gray-500 */
+    --color-neutral-strong: 55 65 81;    /* gray-700 */
+
+    /* Chart axis/grid hooks for Recharts theming. */
+    --color-chart-grid: 229 231 235;     /* gray-200 */
+    --color-chart-axis: 107 114 128;     /* gray-500 */
+    --color-chart-tooltip-bg: 255 255 255;
+    --color-chart-tooltip-border: 229 231 235;
+  }
+
+  .dark {
+    /* Surfaces */
+    --color-surface: 3 7 18;             /* gray-950 */
+    --color-surface-2: 17 24 39;         /* gray-900 */
+    --color-surface-3: 24 33 51;         /* between gray-900 and gray-800 (~"gray-850") */
+
+    /* Borders */
+    --color-border-subtle: 31 41 55;     /* gray-800 */
+    --color-border-default: 55 65 81;    /* gray-700 */
+
+    /* Text */
+    --color-text-primary: 243 244 246;   /* gray-100 */
+    --color-text-secondary: 209 213 219; /* gray-300 */
+    --color-text-muted: 156 163 175;     /* gray-400 */
+
+    /* Polarity — slightly desaturated stops for dark surfaces. */
+    --color-pos-soft: 6 78 59;           /* emerald-900 */
+    --color-pos: 52 211 153;             /* emerald-400 */
+    --color-pos-strong: 110 231 183;     /* emerald-300 */
+
+    --color-neg-soft: 76 5 25;           /* rose-900 */
+    --color-neg: 251 113 133;            /* rose-400 */
+    --color-neg-strong: 253 164 175;     /* rose-300 */
+
+    --color-warn-soft: 120 53 15;        /* amber-900 */
+    --color-warn: 251 191 36;            /* amber-400 */
+    --color-warn-strong: 252 211 77;     /* amber-300 */
+
+    --color-neutral-soft: 31 41 55;      /* gray-800 */
+    --color-neutral: 156 163 175;        /* gray-400 */
+    --color-neutral-strong: 209 213 219; /* gray-300 */
+
+    --color-chart-grid: 31 41 55;        /* gray-800 */
+    --color-chart-axis: 156 163 175;     /* gray-400 */
+    --color-chart-tooltip-bg: 17 24 39;  /* gray-900 */
+    --color-chart-tooltip-border: 55 65 81; /* gray-700 */
+  }
+}
+
+/*
+ * Body background uses the lightest/darkest stop per theme to preserve the
+ * pre-token visual baseline (gray-50 in light, gray-950 in dark). Raised
+ * panels live on `surface` (white) in light and `surface-2` (gray-900) in
+ * dark — `Card variant="panel"` encodes that.
+ */
 body {
-  @apply bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100;
+  @apply bg-surface-2 text-text-primary dark:bg-surface;
 }
 
 html.theme-transitioning *,
 html.theme-transitioning *::before,
 html.theme-transitioning *::after {
   transition: color 100ms ease-out, background-color 100ms ease-out, border-color 100ms ease-out !important;
+}
+
+/*
+ * Project-wide focus-visible styling for interactive surfaces. The previous
+ * baseline relied on per-component `focus:ring-*` patterns which were applied
+ * inconsistently. Centralizing here means every button/link/input/select/tab
+ * gets the same accessible focus outline without each call site having to
+ * remember.
+ */
+@layer base {
+  button:focus-visible,
+  a:focus-visible,
+  [role='tab']:focus-visible,
+  [role='option']:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [role='combobox']:focus-visible {
+    outline: none;
+    /* 2px white offset + 2px primary-500 ring (light mode default). */
+    box-shadow:
+      0 0 0 2px #ffffff,
+      0 0 0 4px #3b82f6;
+  }
+
+  .dark button:focus-visible,
+  .dark a:focus-visible,
+  .dark [role='tab']:focus-visible,
+  .dark [role='option']:focus-visible,
+  .dark input:focus-visible,
+  .dark select:focus-visible,
+  .dark textarea:focus-visible,
+  .dark [role='combobox']:focus-visible {
+    /* gray-900 offset + primary-400 ring for adequate contrast on dark surfaces. */
+    box-shadow:
+      0 0 0 2px #111827,
+      0 0 0 4px #60a5fa;
+  }
+}
+
+/*
+ * Lightweight 150ms opacity fade used by the Player Card tab panel. We
+ * intentionally drop the previous translateY transform — re-mounting the
+ * panel for every tab switch caused jank on long tables; a pure opacity
+ * fade keeps the UX feeling responsive without layout thrash.
+ */
+@keyframes tab-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.animate-tab-fade {
+  animation: tab-fade 150ms ease-out;
 }
