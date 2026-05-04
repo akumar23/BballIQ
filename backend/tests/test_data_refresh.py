@@ -178,6 +178,9 @@ def _patch_impact_service(
     fake_service = MagicMock()
     fake_service.fetch_lineup_data.return_value = {}
     fake_service.get_all_on_off_stats.return_value = on_off_data
+    # Shooting on/off is a separate fetch in the same task; default to
+    # an empty dict so the test exercises only the base-on/off path.
+    fake_service.get_all_on_off_shooting.return_value = {}
 
     fake_calculator = MagicMock()
     fake_calculator.calculate_all_impacts.return_value = {}

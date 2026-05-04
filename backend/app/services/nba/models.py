@@ -43,6 +43,54 @@ class PlayerOnOffData:
 
 
 @dataclass
+class PlayerOnOffShootingData:
+    """Team-shooting on/off splits for a player.
+
+    All eFG / freq / share fields are at the *team* level (not the focal
+    player's own shots): captured from
+    ``TeamPlayerOnOffSummary(measure_type_detailed_defense="Shooting")``.
+
+    ``*_diff`` fields are ``on - off`` and represent the team-level lift
+    when the focal player is on the floor — the headline signal for the
+    gravity index's teammate-lift component.
+    """
+
+    player_id: int
+    player_name: str
+    team_id: int
+    team_abbreviation: str
+
+    # Sample-size signals (used by the Bayesian shrinkage prior).
+    on_court_min: Decimal
+    off_court_min: Decimal
+
+    # eFG%
+    on_court_team_efg: Decimal
+    off_court_team_efg: Decimal
+    team_efg_diff: Decimal
+
+    # Open 3 frequency
+    on_court_team_open3_freq: Decimal
+    off_court_team_open3_freq: Decimal
+    team_open3_freq_diff: Decimal
+
+    # Wide-open 3 frequency
+    on_court_team_wide_open3_freq: Decimal
+    off_court_team_wide_open3_freq: Decimal
+    team_wide_open3_freq_diff: Decimal
+
+    # Catch-and-shoot share of team FGA
+    on_court_team_catch_shoot_share: Decimal
+    off_court_team_catch_shoot_share: Decimal
+    team_catch_shoot_share_diff: Decimal
+
+    # Pull-up share of team FGA
+    on_court_team_pullup_share: Decimal
+    off_court_team_pullup_share: Decimal
+    team_pullup_share_diff: Decimal
+
+
+@dataclass
 class LineupData:
     """5-man lineup data."""
 

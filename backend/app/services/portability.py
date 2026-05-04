@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+from app.services.gravity import compute_gravity
 from app.services.metrics_utils import (
     POSITION_LEAGUE_AVG_FG,
     map_position_to_bucket,
@@ -113,6 +114,12 @@ class PortabilityCalculator:
         all_players_positions: dict[int, str] | None = None,
         league_distributions: dict | None = None,
         scheme_scores: dict | None = None,
+        on_off_shooting=None,
+        defender_distance=None,
+        rim_gravity_score: float = 0.0,
+        paint_touches_per_game: float = 0.0,
+        position: str | None = None,
+        gravity_distributions: dict | None = None,
     ):
         """Initialize with player data objects.
 
@@ -129,6 +136,17 @@ class PortabilityCalculator:
                 for percentile computation (optional, uses raw normalization if absent)
             scheme_scores: Pre-computed scheme compatibility scores dict
                 from SchemeCompatibilityCalculator (optional)
+            on_off_shooting: PlayerOnOffShooting model instance (gravity input)
+            defender_distance: PlayerDefenderDistanceShooting model instance
+                (gravity off-ball / on-ball input)
+            rim_gravity_score: Pre-computed rim gravity score on 0-100 scale
+                (typically from PlayerCardService._build_rim_gravity)
+            paint_touches_per_game: Paint touches per game (sample-size signal
+                for rim component shrinkage)
+            position: Player's position string for positional normalisation
+            gravity_distributions: Per-component, per-bucket {mean, std}
+                distributions for the gravity index (from
+                ``app.services.gravity.build_league_distributions``)
         """
         self.ss = season_stats
         self.pt = play_types
@@ -140,6 +158,12 @@ class PortabilityCalculator:
         self.positions = all_players_positions or {}
         self.league = league_distributions or {}
         self.scheme_scores = scheme_scores
+        self.oo_shooting = on_off_shooting
+        self.dd = defender_distance
+        self.rim_gravity_score = rim_gravity_score
+        self.paint_touches_per_game = paint_touches_per_game
+        self.position = position
+        self.gravity_distributions = gravity_distributions
 
     def _pctile(self, value: float, stat_key: str) -> float:
         """Compute percentile if league distribution available, else normalize."""
@@ -187,29 +211,62 @@ class PortabilityCalculator:
         return normalize_to_0_100(ppp, min_val=0.70, max_val=1.10)
 
     def _gravity_score(self) -> float:
-        """Proxy for off-ball gravity using available data."""
-        # Component 1: Team offensive lift when on court
-        off_rating_lift = safe_float(self.oo.off_rating_diff) if self.oo else 0
-        lift_score = normalize_to_0_100(off_rating_lift, min_val=-5, max_val=5)
+        """Off-ball-first gravity from the canonical compute_gravity().
 
-        # Component 2: Shot creation for teammates (AST ratio + screen assists)
-        ast_ratio = safe_float(self.adv.ast_ratio) if self.adv else 0
-        creation_score = normalize_to_0_100(ast_ratio, min_val=5, max_val=30)
+        Delegates to :func:`app.services.gravity.compute_gravity` so the
+        Self-Creation sub-score's gravity input matches the player-card
+        gravity panel exactly. Inputs are off-ball-dominated (catch-and-
+        shoot weighted tight attention + team eFG / open-3 lift) so this
+        no longer double-counts pull-up 3PA, AST ratio, or PPT — those
+        signals continue to feed the other Self-Creation sub-components
+        (unassisted rate, self-created PPP, creation volume) on their own.
+        """
+        # Defender-distance-derived tight-attention rate: share of FGA
+        # with a defender within 4 ft. Same definition used by the
+        # player-card gravity panel.
+        tight_attention_rate = 0.0
+        if self.dd is not None:
+            tight_attention_rate = safe_float(self.dd.very_tight_fga_freq) + safe_float(
+                self.dd.tight_fga_freq
+            )
 
-        # Component 3: Pull-up 3PT volume (draws closeouts)
-        pullup_3pa = safe_float(self.st.pullup_fg3a) if self.st else 0
-        pullup_3_score = normalize_to_0_100(pullup_3pa, min_val=0, max_val=6)
+        # Per-game shot volumes. SeasonStats stores totals; convert to
+        # per-game so it lines up with the per-game tracking fields.
+        gp = max(1, safe_float(self.ss.games_played) if self.ss else 1)
+        total_fga = safe_div(safe_float(self.ss.total_fga) if self.ss else 0, gp)
 
-        # Component 4: Points per touch efficiency
-        ppt = safe_float(self.ss.avg_points_per_touch) if self.ss else 0
-        ppt_score = normalize_to_0_100(ppt, min_val=0.2, max_val=0.7)
+        catch_shoot_fga = safe_float(self.st.catch_shoot_fga) if self.st else 0
+        pullup_fga = safe_float(self.st.pullup_fga) if self.st else 0
+        drives = safe_float(self.st.drives) if self.st else 0
+        drive_pf = safe_float(self.st.drive_pf) if self.st else 0
 
-        return (
-            lift_score * 0.30
-            + creation_score * 0.30
-            + pullup_3_score * 0.20
-            + ppt_score * 0.20
+        # Teammate-lift inputs come from the new on/off shooting table
+        # (PlayerOnOffShooting). Falls back to zeros if the row is
+        # missing — Bayesian shrinkage handles the low-signal case.
+        team_open3_diff = 0.0
+        team_efg_diff = 0.0
+        on_court_minutes = 0.0
+        if self.oo_shooting is not None:
+            team_open3_diff = safe_float(self.oo_shooting.team_open3_freq_diff)
+            team_efg_diff = safe_float(self.oo_shooting.team_efg_diff)
+            on_court_minutes = safe_float(self.oo_shooting.on_court_minutes)
+
+        components = compute_gravity(
+            position=self.position,
+            tight_attention_rate=tight_attention_rate,
+            catch_shoot_fga=catch_shoot_fga,
+            total_fga=total_fga,
+            team_open3_freq_diff=team_open3_diff,
+            team_efg_diff=team_efg_diff,
+            on_court_minutes=on_court_minutes,
+            pullup_fga=pullup_fga,
+            drive_pf=drive_pf,
+            drives=drives,
+            rim_gravity_score=self.rim_gravity_score,
+            paint_touches=self.paint_touches_per_game,
+            league_distributions=self.gravity_distributions,
         )
+        return components.gravity_index
 
     def _creation_volume_score(self) -> float:
         """Score based on what fraction of possessions are self-created."""

@@ -441,7 +441,12 @@ def refresh_impact_data(self, season: str | None = None) -> dict[str, object]:
     """
     from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-    from app.models import ContextualizedImpact, Player, PlayerOnOffStats
+    from app.models import (
+        ContextualizedImpact,
+        Player,
+        PlayerOnOffShooting,
+        PlayerOnOffStats,
+    )
     from app.services.impact_calculator import ImpactCalculator
     from app.services.nba_data import NBADataService
 
@@ -465,6 +470,19 @@ def refresh_impact_data(self, season: str | None = None) -> dict[str, object]:
         except (CircuitBreakerError, RateLimitError) as e:
             logger.error("Failed to fetch on/off data: %s", e, exc_info=True)
             raise self.retry(exc=e) from e
+
+        # Fetch shooting on/off data (gravity-index input). Treated as
+        # best-effort: a circuit-breaker / rate-limit failure here should
+        # still allow the rest of the impact refresh to proceed because
+        # the gravity index has graceful fallbacks for missing rows.
+        try:
+            shooting_on_off_data = service.get_all_on_off_shooting(season)
+        except (CircuitBreakerError, RateLimitError) as e:
+            logger.warning(
+                "Failed to fetch shooting on/off data, continuing without it: %s",
+                e,
+            )
+            shooting_on_off_data = {}
 
         # Calculate impact
         calculator = ImpactCalculator(lineup_data, on_off_data)
@@ -509,6 +527,41 @@ def refresh_impact_data(self, season: str | None = None) -> dict[str, object]:
                             set_=on_off_update,
                         )
                     )
+
+                    shooting = shooting_on_off_data.get(player_id)
+                    if shooting is not None:
+                        shooting_values = {
+                            "player_id": player.id,
+                            "season": season,
+                            "on_court_minutes": shooting.on_court_min,
+                            "off_court_minutes": shooting.off_court_min,
+                            "on_court_team_efg": shooting.on_court_team_efg,
+                            "off_court_team_efg": shooting.off_court_team_efg,
+                            "team_efg_diff": shooting.team_efg_diff,
+                            "on_court_team_open3_freq": shooting.on_court_team_open3_freq,
+                            "off_court_team_open3_freq": shooting.off_court_team_open3_freq,
+                            "team_open3_freq_diff": shooting.team_open3_freq_diff,
+                            "on_court_team_wide_open3_freq": shooting.on_court_team_wide_open3_freq,
+                            "off_court_team_wide_open3_freq": shooting.off_court_team_wide_open3_freq,
+                            "team_wide_open3_freq_diff": shooting.team_wide_open3_freq_diff,
+                            "on_court_team_catch_shoot_share": shooting.on_court_team_catch_shoot_share,
+                            "off_court_team_catch_shoot_share": shooting.off_court_team_catch_shoot_share,
+                            "team_catch_shoot_share_diff": shooting.team_catch_shoot_share_diff,
+                            "on_court_team_pullup_share": shooting.on_court_team_pullup_share,
+                            "off_court_team_pullup_share": shooting.off_court_team_pullup_share,
+                            "team_pullup_share_diff": shooting.team_pullup_share_diff,
+                        }
+                        shooting_update = _update_set(
+                            shooting_values, "player_id", "season"
+                        )
+                        db.execute(
+                            pg_insert(PlayerOnOffShooting)
+                            .values(**shooting_values)
+                            .on_conflict_do_update(
+                                index_elements=["player_id", "season"],
+                                set_=shooting_update,
+                            )
+                        )
 
                     impact_data = impacts.get(player_id)
                     if impact_data:

@@ -22,6 +22,7 @@ from app.models.peak_rapm import PeakRapm
 from app.models.per_75_stats import Per75Stats
 from app.models.player import Player
 from app.models.player_matchups import PlayerMatchups
+from app.models.player_on_off_shooting import PlayerOnOffShooting
 from app.models.rapm_windows import PlayerRapmWindows
 from app.models.raptor_history import RaptorHistory
 from app.models.rebounding_tracking import PlayerReboundingTracking
@@ -68,4 +69,5 @@ __all__ = [
     "PlayerConsistencyStats",
     "PlayerTouchesBreakdown",
     "PlayerOpponentShooting",
+    "PlayerOnOffShooting",
 ]

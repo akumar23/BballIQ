@@ -30,6 +30,7 @@ class Player(Base):
     game_stats = relationship("GameStats", back_populates="player")
     season_stats = relationship("SeasonStats", back_populates="player")
     on_off_stats = relationship("PlayerOnOffStats", back_populates="player")
+    on_off_shooting = relationship("PlayerOnOffShooting", back_populates="player")
     contextualized_impact = relationship("ContextualizedImpact", back_populates="player")
     game_play_type_stats = relationship("GamePlayTypeStats", back_populates="player")
     season_play_type_stats = relationship("SeasonPlayTypeStats", back_populates="player")

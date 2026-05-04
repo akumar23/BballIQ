@@ -8,7 +8,11 @@ from decimal import Decimal
 from nba_api.stats.static import teams as nba_teams
 
 from app.services import nba_data as _nd
-from app.services.nba.models import LineupData, PlayerOnOffData
+from app.services.nba.models import (
+    LineupData,
+    PlayerOnOffData,
+    PlayerOnOffShootingData,
+)
 from app.services.redis_cache import CacheKeyPrefix
 
 logger = logging.getLogger(__name__)
@@ -73,6 +77,37 @@ class LineupsMixin:
             season=season,
             per_mode_detailed="PerGame",
             measure_type_detailed_defense="Base",
+        )
+        result = data.get_normalized_dict()
+        on_court = result.get("PlayersOnCourtTeamPlayerOnOffSummary", [])
+        off_court = result.get("PlayersOffCourtTeamPlayerOnOffSummary", [])
+        return on_court, off_court
+
+    def get_on_off_shooting_for_team(
+        self, team_id: int, season: str = "2024-25"
+    ) -> tuple[list[dict], list[dict]]:
+        """Get team-shooting on/off splits for a single team.
+
+        Mirrors :meth:`get_on_off_stats_for_team` but requests the
+        ``Shooting`` measure type, which returns team eFG% and shot-class
+        frequency splits (open 3PA, wide-open 3PA, catch-and-shoot share,
+        pull-up share) for each player's on / off court splits.
+
+        Args:
+            team_id: NBA team ID.
+            season: NBA season string.
+
+        Returns:
+            Tuple of (on_court_rows, off_court_rows). Each row is a raw
+            NBA stats dict; field parsing happens in
+            :meth:`get_all_on_off_shooting`.
+        """
+        data = self._request_with_retry(
+            _nd.TeamPlayerOnOffSummary,
+            team_id=team_id,
+            season=season,
+            per_mode_detailed="PerGame",
+            measure_type_detailed_defense="Shooting",
         )
         result = data.get_normalized_dict()
         on_court = result.get("PlayersOnCourtTeamPlayerOnOffSummary", [])
@@ -222,6 +257,91 @@ class LineupsMixin:
 
         return combined
 
+    def get_all_on_off_shooting(
+        self,
+        season: str = "2024-25",
+        progress_callback: callable | None = None,
+    ) -> dict[int, PlayerOnOffShootingData]:
+        """Get team-shooting on/off splits for every player across all teams.
+
+        Iterates the 30 teams calling :meth:`get_on_off_shooting_for_team`
+        for each, then joins the on/off splits per player. Cached as a
+        plain JSON dict keyed by ``str(player_id)``.
+
+        Args:
+            season: NBA season string.
+            progress_callback: Optional callback(team_idx, total, team_name).
+
+        Returns:
+            Dict keyed by player_id with :class:`PlayerOnOffShootingData`.
+        """
+        cache_key = self._get_cache_key(CacheKeyPrefix.NBA_ON_OFF_SHOOTING, season)
+
+        if not self.bypass_cache:
+            cached = _nd.redis_cache.get(cache_key)
+            if cached is not None:
+                logger.info(
+                    "Cache hit for on/off shooting (season: %s)", season
+                )
+                return {
+                    int(k): _on_off_shooting_from_cache(v)
+                    for k, v in cached.items()
+                }
+
+        logger.info(
+            "Cache miss for on/off shooting (season: %s), fetching from API", season
+        )
+
+        all_teams = nba_teams.get_teams()
+        combined: dict[int, PlayerOnOffShootingData] = {}
+
+        for idx, team in enumerate(all_teams):
+            team_id = team["id"]
+            team_abbr = team["abbreviation"]
+            team_name = team["full_name"]
+
+            if progress_callback:
+                progress_callback(idx + 1, len(all_teams), team_name)
+
+            logger.info(
+                "Fetching on/off shooting for %s (%d/%d)",
+                team_abbr,
+                idx + 1,
+                len(all_teams),
+            )
+
+            try:
+                on_court, off_court = self.get_on_off_shooting_for_team(
+                    team_id, season
+                )
+                off_by_pid = {p["VS_PLAYER_ID"]: p for p in off_court}
+
+                for player in on_court:
+                    pid = player["VS_PLAYER_ID"]
+                    off_row = off_by_pid.get(pid, {})
+                    combined[pid] = _parse_on_off_shooting_row(
+                        player, off_row, team_id, team_abbr
+                    )
+
+            except Exception as e:
+                logger.warning(
+                    "Failed to fetch on/off shooting for %s: %s", team_abbr, e
+                )
+                continue
+
+        logger.info(
+            "Collected on/off shooting data for %d players", len(combined)
+        )
+
+        cache_data = {
+            str(k): _on_off_shooting_to_cache(v) for k, v in combined.items()
+        }
+        _nd.redis_cache.set(
+            cache_key, cache_data, ttl=_nd.settings.cache_ttl_tracking_stats
+        )
+
+        return combined
+
     def fetch_lineup_data(self, season: str = "2024-25") -> list[LineupData]:
         """Fetch and parse lineup data into LineupData objects.
 
@@ -286,3 +406,166 @@ class LineupsMixin:
             )
 
         return lineups
+
+
+# ---------------------------------------------------------------------------
+# Shooting on/off parsing helpers
+# ---------------------------------------------------------------------------
+#
+# Centralised here (rather than inlined in the mixin) so the assumed NBA
+# Stats response shape lives in one obvious place. The ``Shooting`` measure
+# of ``TeamPlayerOnOffSummary`` is documented to return a row per player
+# with the following columns relevant to gravity (verified against the
+# sibling ``Base`` measure pattern at ``get_on_off_stats_for_team`` —
+# the API uses identical key conventions across measure types):
+#
+#   EFG_PCT                    -- team effective FG% with player on/off
+#   PCT_OPEN_3PA               -- share of 3PA that were "open" (4-6 ft)
+#   PCT_WIDE_OPEN_3PA          -- share of 3PA that were wide open (6+ ft)
+#   PCT_FGA_CATCH_SHOOT        -- catch-and-shoot share of total FGA
+#   PCT_FGA_PULL_UP            -- pull-up share of total FGA
+#   MIN                        -- on/off minutes (sample-size signal)
+#
+# If the live NBA API uses slightly different column names, only the
+# small mapping below needs to change.
+
+_SHOOTING_ON_OFF_FIELDS = {
+    "efg": "EFG_PCT",
+    "open3_freq": "PCT_OPEN_3PA",
+    "wide_open3_freq": "PCT_WIDE_OPEN_3PA",
+    "catch_shoot_share": "PCT_FGA_CATCH_SHOOT",
+    "pullup_share": "PCT_FGA_PULL_UP",
+    "minutes": "MIN",
+}
+
+
+def _shooting_field(row: dict, key: str) -> Decimal:
+    """Coerce a single shooting on/off field to ``Decimal``.
+
+    Treats missing / non-numeric values as zero, matching the convention
+    used by :meth:`LineupsMixin.get_all_on_off_stats` for base on/off.
+    """
+    column = _SHOOTING_ON_OFF_FIELDS[key]
+    raw = row.get(column, 0) or 0
+    try:
+        return Decimal(str(raw))
+    except (ArithmeticError, ValueError):
+        return Decimal("0")
+
+
+def _parse_on_off_shooting_row(
+    on_row: dict,
+    off_row: dict,
+    team_id: int,
+    team_abbr: str,
+) -> PlayerOnOffShootingData:
+    """Build a :class:`PlayerOnOffShootingData` from on/off rows.
+
+    Differentials are computed as ``on - off``. ``team_*_diff`` fields
+    feed the gravity index's teammate-lift component directly.
+    """
+    on_min = _shooting_field(on_row, "minutes")
+    off_min = _shooting_field(off_row, "minutes")
+
+    on_efg = _shooting_field(on_row, "efg")
+    off_efg = _shooting_field(off_row, "efg")
+    on_open3 = _shooting_field(on_row, "open3_freq")
+    off_open3 = _shooting_field(off_row, "open3_freq")
+    on_wide_open3 = _shooting_field(on_row, "wide_open3_freq")
+    off_wide_open3 = _shooting_field(off_row, "wide_open3_freq")
+    on_cs = _shooting_field(on_row, "catch_shoot_share")
+    off_cs = _shooting_field(off_row, "catch_shoot_share")
+    on_pu = _shooting_field(on_row, "pullup_share")
+    off_pu = _shooting_field(off_row, "pullup_share")
+
+    return PlayerOnOffShootingData(
+        player_id=on_row.get("VS_PLAYER_ID", 0),
+        player_name=on_row.get("VS_PLAYER_NAME", "") or "",
+        team_id=team_id,
+        team_abbreviation=team_abbr,
+        on_court_min=on_min,
+        off_court_min=off_min,
+        on_court_team_efg=on_efg,
+        off_court_team_efg=off_efg,
+        team_efg_diff=on_efg - off_efg,
+        on_court_team_open3_freq=on_open3,
+        off_court_team_open3_freq=off_open3,
+        team_open3_freq_diff=on_open3 - off_open3,
+        on_court_team_wide_open3_freq=on_wide_open3,
+        off_court_team_wide_open3_freq=off_wide_open3,
+        team_wide_open3_freq_diff=on_wide_open3 - off_wide_open3,
+        on_court_team_catch_shoot_share=on_cs,
+        off_court_team_catch_shoot_share=off_cs,
+        team_catch_shoot_share_diff=on_cs - off_cs,
+        on_court_team_pullup_share=on_pu,
+        off_court_team_pullup_share=off_pu,
+        team_pullup_share_diff=on_pu - off_pu,
+    )
+
+
+def _on_off_shooting_to_cache(d: PlayerOnOffShootingData) -> dict[str, str | int]:
+    """Serialise a :class:`PlayerOnOffShootingData` as a JSON-safe dict."""
+    return {
+        "player_id": d.player_id,
+        "player_name": d.player_name,
+        "team_id": d.team_id,
+        "team_abbreviation": d.team_abbreviation,
+        "on_court_min": str(d.on_court_min),
+        "off_court_min": str(d.off_court_min),
+        "on_court_team_efg": str(d.on_court_team_efg),
+        "off_court_team_efg": str(d.off_court_team_efg),
+        "team_efg_diff": str(d.team_efg_diff),
+        "on_court_team_open3_freq": str(d.on_court_team_open3_freq),
+        "off_court_team_open3_freq": str(d.off_court_team_open3_freq),
+        "team_open3_freq_diff": str(d.team_open3_freq_diff),
+        "on_court_team_wide_open3_freq": str(d.on_court_team_wide_open3_freq),
+        "off_court_team_wide_open3_freq": str(d.off_court_team_wide_open3_freq),
+        "team_wide_open3_freq_diff": str(d.team_wide_open3_freq_diff),
+        "on_court_team_catch_shoot_share": str(d.on_court_team_catch_shoot_share),
+        "off_court_team_catch_shoot_share": str(
+            d.off_court_team_catch_shoot_share
+        ),
+        "team_catch_shoot_share_diff": str(d.team_catch_shoot_share_diff),
+        "on_court_team_pullup_share": str(d.on_court_team_pullup_share),
+        "off_court_team_pullup_share": str(d.off_court_team_pullup_share),
+        "team_pullup_share_diff": str(d.team_pullup_share_diff),
+    }
+
+
+def _on_off_shooting_from_cache(v: dict) -> PlayerOnOffShootingData:
+    """Inverse of :func:`_on_off_shooting_to_cache`."""
+    return PlayerOnOffShootingData(
+        player_id=int(v["player_id"]),
+        player_name=v["player_name"],
+        team_id=int(v["team_id"]),
+        team_abbreviation=v["team_abbreviation"],
+        on_court_min=Decimal(str(v["on_court_min"])),
+        off_court_min=Decimal(str(v["off_court_min"])),
+        on_court_team_efg=Decimal(str(v["on_court_team_efg"])),
+        off_court_team_efg=Decimal(str(v["off_court_team_efg"])),
+        team_efg_diff=Decimal(str(v["team_efg_diff"])),
+        on_court_team_open3_freq=Decimal(str(v["on_court_team_open3_freq"])),
+        off_court_team_open3_freq=Decimal(str(v["off_court_team_open3_freq"])),
+        team_open3_freq_diff=Decimal(str(v["team_open3_freq_diff"])),
+        on_court_team_wide_open3_freq=Decimal(
+            str(v["on_court_team_wide_open3_freq"])
+        ),
+        off_court_team_wide_open3_freq=Decimal(
+            str(v["off_court_team_wide_open3_freq"])
+        ),
+        team_wide_open3_freq_diff=Decimal(str(v["team_wide_open3_freq_diff"])),
+        on_court_team_catch_shoot_share=Decimal(
+            str(v["on_court_team_catch_shoot_share"])
+        ),
+        off_court_team_catch_shoot_share=Decimal(
+            str(v["off_court_team_catch_shoot_share"])
+        ),
+        team_catch_shoot_share_diff=Decimal(
+            str(v["team_catch_shoot_share_diff"])
+        ),
+        on_court_team_pullup_share=Decimal(str(v["on_court_team_pullup_share"])),
+        off_court_team_pullup_share=Decimal(
+            str(v["off_court_team_pullup_share"])
+        ),
+        team_pullup_share_diff=Decimal(str(v["team_pullup_share_diff"])),
+    )

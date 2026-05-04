@@ -192,6 +192,10 @@ class TestRefreshImpactDataHappyPath:
         fake_service = MagicMock()
         fake_service.fetch_lineup_data.return_value = {}
         fake_service.get_all_on_off_stats.return_value = on_off
+        # No shooting-on/off rows in the happy-path test: keeps the
+        # insert count tied 1-to-1 with the on-off rows, isolating this
+        # assertion from the shooting-on/off wiring.
+        fake_service.get_all_on_off_shooting.return_value = {}
 
         fake_calc = MagicMock()
         fake_calc.calculate_all_impacts.return_value = {}
@@ -215,8 +219,8 @@ class TestRefreshImpactDataHappyPath:
         assert payload["status"] == "success"
         assert payload["processed"] == 3
         assert payload["errors"] == 0
-        # Each of 3 players triggers one on-off execute (no impact_data, so
-        # only one insert per player).
+        # Each of 3 players triggers one on-off execute (no impact_data
+        # and no shooting-on/off, so only one insert per player).
         assert len(fake_db.executes) == 3
         # All savepoints committed.
         assert all(sp.committed for sp in fake_db.savepoints)

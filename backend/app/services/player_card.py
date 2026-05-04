@@ -28,6 +28,7 @@ from app.models import (
     PlayerDefensivePlayTypes,
     PlayerDefensiveStats,
     PlayerMatchups,
+    PlayerOnOffShooting,
     PlayerOnOffStats,
     PlayerOpponentShooting,
     PlayerPassingStats,
@@ -102,8 +103,9 @@ from app.services.championship import (
     ChampionshipCalculator,
     compute_playoff_ts_drop,
 )
+from app.services.gravity import compute_gravity
 from app.services.luck_adjusted import LuckAdjustedCalculator
-from app.services.metrics_utils import safe_float, to_decimal
+from app.services.metrics_utils import safe_div, safe_float, to_decimal
 from app.services.opponent_tier import TIER_WEIGHTS, OpponentTierCalculator
 from app.services.portability import PortabilityCalculator
 from app.services.redis_cache import redis_cache
@@ -297,6 +299,25 @@ class PlayerCardService:
         card_scheme_scores, scheme_dict = self._compute_scheme_compatibility(
             play_types, advanced, per75, shooting_tracking, shot_zones
         )
+
+        # Gravity inputs that both portability + the card gravity panel
+        # share. Compute rim-gravity once up front so both can z-score
+        # against the same value.
+        on_off_shooting = self._first(PlayerOnOffShooting)
+        defender_distance = self._first(PlayerDefenderDistanceShooting)
+        touches_for_rim = self._first(PlayerTouchesBreakdown)
+        card_rim_gravity = self._build_rim_gravity(shot_zones)
+        rim_gravity_score = (
+            float(card_rim_gravity.rim_gravity_score)
+            if card_rim_gravity and card_rim_gravity.rim_gravity_score is not None
+            else 0.0
+        )
+        paint_touches_per_game = (
+            float(touches_for_rim.paint_touches)
+            if touches_for_rim and touches_for_rim.paint_touches is not None
+            else 0.0
+        )
+
         card_portability, portability_score = self._compute_portability(
             season_stat,
             play_types,
@@ -306,6 +327,11 @@ class PlayerCardService:
             per75,
             scheme_dict,
             card_scheme_scores,
+            player=player,
+            on_off_shooting=on_off_shooting,
+            defender_distance=defender_distance,
+            rim_gravity_score=rim_gravity_score,
+            paint_touches_per_game=paint_touches_per_game,
         )
         card_championship = self._compute_championship(
             season_stat,
@@ -340,10 +366,19 @@ class PlayerCardService:
         # existing data sections above. These read no new DB tables; they
         # synthesize sections already fetched (defender distance, play
         # types, passing, touches, on/off).
+        # NOTE: card_rim_gravity is computed earlier (alongside the
+        # gravity inputs) so the gravity index can z-score against it.
         card_friction = self._build_friction_efficiency()
-        card_gravity = self._build_gravity_index(on_off)
+        card_gravity = self._build_gravity_index(
+            season_stat=season_stat,
+            shooting_tracking=shooting_tracking,
+            defender_distance=defender_distance,
+            on_off_shooting=on_off_shooting,
+            position=player.position,
+            rim_gravity_score=rim_gravity_score,
+            paint_touches_per_game=paint_touches_per_game,
+        )
         card_shot_diet = self._build_shot_diet(play_types)
-        card_rim_gravity = self._build_rim_gravity(shot_zones)
         card_pass_funnel = self._build_pass_funnel(current_career, season_stat, gp)
         card_leverage_ts = self._build_leverage_ts()
         card_possession_dwell = self._build_possession_dwell(season_stat, gp)
@@ -839,6 +874,12 @@ class PlayerCardService:
         per75,
         scheme_dict,
         card_scheme_scores,
+        *,
+        player,
+        on_off_shooting=None,
+        defender_distance=None,
+        rim_gravity_score: float = 0.0,
+        paint_touches_per_game: float = 0.0,
     ) -> tuple[CardPortability | None, float]:
         portability_score = 50.0
         if not (season_stat and play_types and advanced):
@@ -867,6 +908,11 @@ class PlayerCardService:
             matchups=all_matchups,
             all_players_positions=all_player_positions,
             scheme_scores=scheme_dict,
+            on_off_shooting=on_off_shooting,
+            defender_distance=defender_distance,
+            rim_gravity_score=rim_gravity_score,
+            paint_touches_per_game=paint_touches_per_game,
+            position=player.position if player else None,
         )
         port_result = port_calc.calculate()
         portability_score = port_result.portability_index
@@ -1674,67 +1720,100 @@ class PlayerCardService:
         )
 
     def _build_gravity_index(
-        self, on_off: PlayerOnOffStats | None
+        self,
+        *,
+        season_stat: SeasonStats | None,
+        shooting_tracking: PlayerShootingTracking | None,
+        defender_distance: PlayerDefenderDistanceShooting | None,
+        on_off_shooting: PlayerOnOffShooting | None,
+        position: str | None,
+        rim_gravity_score: float,
+        paint_touches_per_game: float,
     ) -> CardGravityIndex | None:
-        """Proxy gravity via tight-coverage share + team off-rating lift.
+        """Canonical 0-100 gravity index via :func:`compute_gravity`.
 
-        Combines two signals that are both weakly correlated with true
-        gravity (teammate CS3 defender-distance on/off isn't exposed by
-        the NBA Stats endpoints we ingest):
-        - tight_attention_rate: defenders assign tighter coverage to
-          threats, so a high share of very-tight + tight FGA indicates
-          the defense is respecting the player's gravity.
-        - team_off_lift: when a gravity player exits, offense usually
-          slips; positive lift is consistent with drawing attention.
+        The gravity computation lives in :mod:`app.services.gravity` so
+        this card panel and the Self-Creation sub-score in
+        :class:`PortabilityCalculator` produce identical numbers from
+        the same inputs.
 
-        Weighted 60/40 toward the defender-proximity signal because it's
-        a direct per-shot observation, where on/off is noisy at the
-        season level.
+        Inputs are off-ball-first: the dominant signals are tight
+        attention weighted by catch-and-shoot share + team eFG / open-3
+        lift on/off. Pull-up and drive signals contribute via the on-ball
+        component (20% weight). Bayesian shrinkage + positional z-scores
+        replace the old hard clamps so low-volume players land near the
+        positional mean instead of being score-clipped.
+
+        Returns ``None`` if there is no signal of any kind (no defender
+        distance row AND no shooting on/off row).
         """
-        dd = self._first(PlayerDefenderDistanceShooting)
-        if not dd and not on_off:
+        if defender_distance is None and on_off_shooting is None:
             return None
 
-        tight_attention = None
-        if dd and (dd.very_tight_fga_freq is not None or dd.tight_fga_freq is not None):
-            tight_attention = to_decimal(
-                safe_float(dd.very_tight_fga_freq) + safe_float(dd.tight_fga_freq),
-                "0.001",
-            )
+        # tight_attention_rate -- shared with the Self-Creation gravity
+        # computation. Stored on the schema as a Decimal for the UI.
+        tight_attention_value = 0.0
+        tight_attention_decimal: Decimal | None = None
+        if defender_distance is not None and (
+            defender_distance.very_tight_fga_freq is not None
+            or defender_distance.tight_fga_freq is not None
+        ):
+            tight_attention_value = safe_float(
+                defender_distance.very_tight_fga_freq
+            ) + safe_float(defender_distance.tight_fga_freq)
+            tight_attention_decimal = to_decimal(tight_attention_value, "0.001")
 
-        team_lift = None
-        if on_off and on_off.off_rating_diff is not None:
-            team_lift = on_off.off_rating_diff
+        # team_off_lift -- now backed by team eFG lift on/off, the
+        # gravity-relevant variant of the prior generic on/off rating
+        # diff. Schema field name is unchanged so the frontend keeps
+        # rendering it without modification.
+        team_off_lift_decimal: Decimal | None = None
+        team_efg_diff = 0.0
+        team_open3_diff = 0.0
+        on_court_minutes = 0.0
+        if on_off_shooting is not None:
+            team_efg_diff = safe_float(on_off_shooting.team_efg_diff)
+            team_open3_diff = safe_float(on_off_shooting.team_open3_freq_diff)
+            on_court_minutes = safe_float(on_off_shooting.on_court_minutes)
+            if on_off_shooting.team_efg_diff is not None:
+                team_off_lift_decimal = to_decimal(team_efg_diff, "0.001")
 
-        # 0-100 composite. Clamps inputs before weighting.
-        # tight_attention: league-wide leaders sit around 0.55; floor ~0.25.
-        # team_lift: typical range -8 .. +12 pts/100 poss.
-        tight_norm = 0.0
-        if tight_attention is not None:
-            tight_norm = max(0.0, min(1.0, (safe_float(tight_attention) - 0.25) / 0.30))
-        lift_norm = 0.0
-        if team_lift is not None:
-            lift_norm = max(0.0, min(1.0, (safe_float(team_lift) + 8.0) / 20.0))
-
-        if tight_attention is None and team_lift is None:
-            return None
-        # Weight absent signal to 0 and renormalize so one-sided data
-        # still produces a score on the same 0-100 scale.
-        weights = (
-            0.6 if tight_attention is not None else 0.0,
-            0.4 if team_lift is not None else 0.0,
+        gp = max(1, safe_float(season_stat.games_played) if season_stat else 1)
+        total_fga_per_game = safe_div(
+            safe_float(season_stat.total_fga) if season_stat else 0, gp
         )
-        total_w = weights[0] + weights[1]
-        if total_w == 0:
-            return None
-        gravity = (
-            100.0 * (tight_norm * weights[0] + lift_norm * weights[1]) / total_w
+        catch_shoot_fga = (
+            safe_float(shooting_tracking.catch_shoot_fga)
+            if shooting_tracking
+            else 0.0
+        )
+        pullup_fga = (
+            safe_float(shooting_tracking.pullup_fga) if shooting_tracking else 0.0
+        )
+        drives = safe_float(shooting_tracking.drives) if shooting_tracking else 0.0
+        drive_pf = (
+            safe_float(shooting_tracking.drive_pf) if shooting_tracking else 0.0
+        )
+
+        components = compute_gravity(
+            position=position,
+            tight_attention_rate=tight_attention_value,
+            catch_shoot_fga=catch_shoot_fga,
+            total_fga=total_fga_per_game,
+            team_open3_freq_diff=team_open3_diff,
+            team_efg_diff=team_efg_diff,
+            on_court_minutes=on_court_minutes,
+            pullup_fga=pullup_fga,
+            drive_pf=drive_pf,
+            drives=drives,
+            rim_gravity_score=rim_gravity_score,
+            paint_touches=paint_touches_per_game,
         )
 
         return CardGravityIndex(
-            tight_attention_rate=tight_attention,
-            team_off_lift=team_lift,
-            gravity_index=to_decimal(gravity, "0.1"),
+            tight_attention_rate=tight_attention_decimal,
+            team_off_lift=team_off_lift_decimal,
+            gravity_index=to_decimal(components.gravity_index, "0.1"),
         )
 
     @staticmethod

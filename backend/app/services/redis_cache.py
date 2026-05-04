@@ -37,6 +37,7 @@ class CacheKeyPrefix(StrEnum):
     NBA_TRACKING_DATA = "nba:tracking_data"
     NBA_LINEUP_STATS = "nba:lineup_stats"
     NBA_ON_OFF_STATS = "nba:on_off_stats"
+    NBA_ON_OFF_SHOOTING = "nba:on_off_shooting"
     NBA_PLAY_TYPE_STATS = "nba:play_type_stats"
     NBA_ADVANCED_STATS = "nba:advanced_stats"
     NBA_SHOT_LOCATIONS = "nba:shot_locations"
