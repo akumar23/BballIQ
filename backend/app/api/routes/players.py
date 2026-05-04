@@ -20,7 +20,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi_cache.decorator import cache
-from sqlalchemy import func
+from sqlalchemy import func, select, union
 from sqlalchemy.exc import DBAPIError, ProgrammingError
 from sqlalchemy.orm import Session
 
@@ -134,8 +134,11 @@ async def get_available_players(
     """Get all players with every season they have data for, for the card selector.
 
     Returns a flat list sorted by ``player.name`` then ``season`` descending.
-    Each entry represents a distinct player+season combination that has
-    career stats in the database.
+    Each entry represents a distinct player+season combination — sourced from
+    ``season_stats`` (every player who actually played that season) UNIONed
+    with ``player_career_stats`` (covers historical seasons that may predate
+    the per-season tracking pipeline). The union dedupes overlap so a player
+    appears once per season they have any data for.
 
     Response shape:
 
@@ -148,11 +151,27 @@ async def get_available_players(
     """
     paginated = limit is not None or offset is not None
 
+    # Source the (player_id, season) set from BOTH season_stats and
+    # player_career_stats. Using only career_stats hid 80% of current-season
+    # players (rookies/sophomores not in the top-100 by all-time minutes that
+    # Phase 2 fetches career history for). UNION (DISTINCT) dedupes the
+    # overlap.
+    season_pairs = union(
+        select(
+            SeasonStats.player_id.label("player_id"),
+            SeasonStats.season.label("season"),
+        ),
+        select(
+            PlayerCareerStats.player_id.label("player_id"),
+            PlayerCareerStats.season.label("season"),
+        ),
+    ).subquery("season_pairs")
+
     base_query = (
-        db.query(Player, PlayerCareerStats.season)
-        .join(PlayerCareerStats, Player.id == PlayerCareerStats.player_id)
+        db.query(Player, season_pairs.c.season)
+        .join(season_pairs, season_pairs.c.player_id == Player.id)
         .filter(Player.active == True)
-        .order_by(Player.name, PlayerCareerStats.season.desc())
+        .order_by(Player.name, season_pairs.c.season.desc())
     )
 
     if not paginated:
@@ -175,8 +194,8 @@ async def get_available_players(
     # being paginated, not ``SELECT COUNT(*) FROM players``.
     total = (
         db.query(func.count())
-        .select_from(Player)
-        .join(PlayerCareerStats, Player.id == PlayerCareerStats.player_id)
+        .select_from(season_pairs)
+        .join(Player, Player.id == season_pairs.c.player_id)
         .filter(Player.active.is_(True))
         .scalar()
     ) or 0
