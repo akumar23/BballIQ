@@ -378,9 +378,8 @@ def build_league_distributions(
         by_component[comp].setdefault("ALL", []).append(value)
 
     for s in samples:
-        bucket = map_position_to_bucket(
-            s.get("position") if isinstance(s.get("position"), str) else None
-        )
+        position = s.get("position")
+        bucket = map_position_to_bucket(position if isinstance(position, str) else None)
 
         ob, _ = _raw_off_ball(
             tight_attention_rate=safe_float(s.get("tight_attention_rate")),
