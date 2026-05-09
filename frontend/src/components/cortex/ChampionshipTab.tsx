@@ -57,7 +57,7 @@ export default function ChampionshipTab({ player }: { player: CortexPlayer }) {
             <p className="text-body text-text-secondary leading-relaxed">{c.verdict}</p>
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-3 mt-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6">
           <Card variant="inset">
             <Stat label="Win Prob / Season" value={`${c.winProbability}%`} size="md" />
           </Card>
@@ -107,7 +107,7 @@ export default function ChampionshipTab({ player }: { player: CortexPlayer }) {
       {/* Playoff Projection */}
       <SectionHeader title="Playoff Performance Projection" />
       <Card className="mb-4">
-        <div className="grid grid-cols-4 gap-3 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           {[
             { label: 'PPG', proj: c.playoffProjection.ppg, drop: c.playoffProjection.regToPlayoffDrop.ppg },
             { label: 'TS%', proj: c.playoffProjection.ts, drop: c.playoffProjection.regToPlayoffDrop.ts },

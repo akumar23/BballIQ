@@ -458,7 +458,7 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
                   Pass Funnel & Cascade Playmaking
                   <span className="ml-2 normal-case tracking-normal text-gray-500 dark:text-gray-400">creation conversion chain</span>
                 </p>
-                <div className="grid grid-cols-4 gap-2 mb-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
                   {[
                     { label: 'Passes/G', value: pf.passesMade.toFixed(1) },
                     { label: 'Potential Ast', value: pf.potentialAst.toFixed(1) },
@@ -471,7 +471,7 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
                     </div>
                   ))}
                 </div>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <StatBox
                     label="Pass → Potential"
                     value={`${pf.passToPotentialPct.toFixed(1)}%`}
@@ -511,7 +511,7 @@ export default function PortabilityTab({ player }: { player: CortexPlayer }) {
             }`}>{pos}</div>
           ))}
         </div>
-        <div className="grid grid-cols-3 gap-3 mb-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
           <StatBox label="Switch Score" value={p.defensiveSwitchability.switchScore} />
           <StatBox label="Perim DFG% Diff" value={`${p.defensiveSwitchability.perimeterDfgDiff > 0 ? '+' : ''}${p.defensiveSwitchability.perimeterDfgDiff.toFixed(1)}%`} />
           <StatBox label="PnR Navigation" value={p.defensiveSwitchability.pnrNavigation} />

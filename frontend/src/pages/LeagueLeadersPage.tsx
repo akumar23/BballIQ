@@ -8,6 +8,7 @@ import DataTable from '@/components/ui/DataTable'
 import type { PlayerPerGameStats } from '@/types'
 type StatKey = 'games_played' | 'ppg' | 'rpg' | 'apg' | 'mpg' | 'spg' | 'bpg'
 
+
 const TABS: { key: StatKey; label: string; header: string }[] = [
   { key: 'games_played', label: 'Games Played', header: 'GP' },
   { key: 'ppg', label: 'Points', header: 'PPG' },
@@ -20,9 +21,9 @@ const TABS: { key: StatKey; label: string; header: string }[] = [
 
 const TAB_ITEMS: TabItem<StatKey>[] = TABS.map((t) => ({ key: t.key, label: t.label }))
 
-function StatCell({ value, highlight }: { value: number | null; highlight: boolean }) {
+function StatCell({ value, highlight, className }: { value: number | null; highlight: boolean; className?: string }) {
   return (
-    <td className="px-4 py-3 text-center">
+    <td className={cn('px-4 py-3 text-center', className)}>
       <span
         className={cn(
           'text-sm',
@@ -46,6 +47,9 @@ function PlayerRow({
   rank: number
   statKey: StatKey
 }) {
+  const colClass = (key: StatKey) =>
+    statKey !== key ? 'hidden sm:table-cell' : undefined
+
   return (
     <tr className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
       <td className="px-4 py-3 whitespace-nowrap">
@@ -61,13 +65,13 @@ function PlayerRow({
           </div>
         </Link>
       </td>
-      <StatCell value={player.games_played} highlight={statKey === 'games_played'} />
-      <StatCell value={player.ppg} highlight={statKey === 'ppg'} />
-      <StatCell value={player.rpg} highlight={statKey === 'rpg'} />
-      <StatCell value={player.apg} highlight={statKey === 'apg'} />
-      <StatCell value={player.mpg} highlight={statKey === 'mpg'} />
-      <StatCell value={player.spg} highlight={statKey === 'spg'} />
-      <StatCell value={player.bpg} highlight={statKey === 'bpg'} />
+      <StatCell value={player.games_played} highlight={statKey === 'games_played'} className={colClass('games_played')} />
+      <StatCell value={player.ppg} highlight={statKey === 'ppg'} className={colClass('ppg')} />
+      <StatCell value={player.rpg} highlight={statKey === 'rpg'} className={colClass('rpg')} />
+      <StatCell value={player.apg} highlight={statKey === 'apg'} className={colClass('apg')} />
+      <StatCell value={player.mpg} highlight={statKey === 'mpg'} className={colClass('mpg')} />
+      <StatCell value={player.spg} highlight={statKey === 'spg'} className={colClass('spg')} />
+      <StatCell value={player.bpg} highlight={statKey === 'bpg'} className={colClass('bpg')} />
     </tr>
   )
 }
@@ -164,6 +168,7 @@ export default function LeagueLeadersPage() {
                       activeTab === tab.key
                         ? 'text-primary-600 dark:text-primary-400'
                         : 'text-text-muted',
+                      activeTab !== tab.key ? 'hidden sm:table-cell' : '',
                     )}
                   >
                     {tab.header}

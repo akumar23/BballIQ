@@ -39,7 +39,7 @@ export default function PlayerDetailPage() {
         </div>
 
         {player.metrics && (
-          <div className="grid grid-cols-3 gap-4 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
             <MetricGauge
               label="OFFENSE"
               value={player.metrics.offensive_metric}

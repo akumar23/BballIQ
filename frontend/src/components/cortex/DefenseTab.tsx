@@ -122,7 +122,7 @@ export default function DefenseTab({ player }: { player: CortexPlayer }) {
 
       {/* Rim Protection */}
       <SectionHeader title="Rim Protection" />
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
         <StatBox label="Contests/G" value={d.rimProtection.contestsPerGame.toFixed(1)} className="text-center" />
         <StatBox label="DFG% at Rim" value={`${d.rimProtection.dfgPctAtRim.toFixed(1)}%`} className="text-center" />
         <StatBox label="Diff vs League" value={`${d.rimProtection.diffVsLeague > 0 ? '+' : ''}${d.rimProtection.diffVsLeague.toFixed(1)}%`} className="text-center" />
